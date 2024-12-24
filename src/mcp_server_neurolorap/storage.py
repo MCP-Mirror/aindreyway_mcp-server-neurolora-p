@@ -69,20 +69,40 @@ class StorageManager:
         """Create required directories."""
         try:
             import os
+            import time
 
             # Create all directories with parents
-            self.project_docs_dir.mkdir(parents=True, exist_ok=True)
-            logger.info(
-                "Created/verified project directory: %s",
-                self.project_docs_dir,
-            )
+            try:
+                self.project_docs_dir.mkdir(parents=True, exist_ok=True)
+                logger.info(
+                    "Created/verified project directory: %s",
+                    self.project_docs_dir,
+                )
+            except PermissionError:
+                logger.error(
+                    f"Permission denied creating directory: "
+                    f"{self.project_docs_dir}"
+                )
+                raise
+            except OSError as e:
+                logger.error(f"OS error creating directory: {str(e)}")
+                raise
 
             # Create marker file and force immediate directory availability
             marker = self.project_docs_dir / ".initialized"
-            with open(marker, "w") as f:
-                f.write("initialized")
-                f.flush()
-                os.fsync(f.fileno())
+            try:
+                with open(marker, "w") as f:
+                    f.write("initialized")
+                    f.flush()
+                    os.fsync(f.fileno())
+            except PermissionError:
+                logger.error(
+                    f"Permission denied creating marker file: {marker}"
+                )
+                raise
+            except IOError as e:
+                logger.error(f"I/O error creating marker file: {str(e)}")
+                raise
 
             # Force sync to ensure all changes are written
             os.sync()
@@ -94,8 +114,6 @@ class StorageManager:
                 )
 
             # Wait for directory to be visible in filesystem
-            import time
-
             max_retries = 10
             retry_delay = 0.1  # seconds
             for _ in range(max_retries):
@@ -110,27 +128,41 @@ class StorageManager:
 
             # Final sync
             os.sync()
+
+        except (PermissionError, OSError, IOError) as e:
+            logger.error(f"File system error creating directories: {str(e)}")
+            raise
+        except RuntimeError as e:
+            logger.error(f"Runtime error creating directories: {str(e)}")
+            raise
         except Exception as e:
-            logger.error("Error creating directories: %s", str(e))
+            logger.error(f"Unexpected error creating directories: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
             raise
 
     def _create_symlinks(self) -> None:
         """Create or update symlinks."""
         try:
             import os
-
-            # Create symlink to project docs directory
-            self._create_or_update_symlink(
-                self.neurolora_link,
-                self.project_docs_dir,
-                ".neurolora",
-            )
-            # Force sync to ensure symlink is visible
-            os.sync()
-
-            # Wait for symlink to be visible in filesystem
             import time
 
+            try:
+                # Create symlink to project docs directory
+                self._create_or_update_symlink(
+                    self.neurolora_link,
+                    self.project_docs_dir,
+                    ".neurolora",
+                )
+                # Force sync to ensure symlink is visible
+                os.sync()
+            except PermissionError as e:
+                logger.error(f"Permission denied creating symlink: {str(e)}")
+                raise
+            except OSError as e:
+                logger.error(f"OS error creating symlink: {str(e)}")
+                raise
+
+            # Wait for symlink to be visible in filesystem
             max_retries = 10
             retry_delay = 0.1  # seconds
             for _ in range(max_retries):
@@ -153,8 +185,15 @@ class StorageManager:
                 "Symlink created and verified: %s",
                 self.neurolora_link,
             )
+        except (PermissionError, OSError) as e:
+            logger.error(f"File system error creating symlinks: {str(e)}")
+            raise
+        except RuntimeError as e:
+            logger.error(f"Runtime error creating symlinks: {str(e)}")
+            raise
         except Exception as e:
-            logger.error("Error creating symlinks: %s", str(e))
+            logger.error(f"Unexpected error creating symlinks: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
             raise
 
     def _create_or_update_symlink(
@@ -173,53 +212,118 @@ class StorageManager:
             target_path,
         )
         try:
-            if link_path.exists():
-                logger.info("Link path exists: %s", link_path)
-                if not link_path.is_symlink():
-                    logger.warning("Removing non-symlink %s", link_name)
-                    link_path.unlink()
+            try:
+                if link_path.exists():
+                    logger.info("Link path exists: %s", link_path)
+                    if not link_path.is_symlink():
+                        logger.warning("Removing non-symlink %s", link_name)
+                        link_path.unlink()
+                        link_path.symlink_to(
+                            target_path, target_is_directory=True
+                        )
+                    elif link_path.resolve() != target_path:
+                        logger.warning(
+                            "Updating incorrect %s symlink", link_name
+                        )
+                        link_path.unlink()
+                        link_path.symlink_to(
+                            target_path, target_is_directory=True
+                        )
+                else:
+                    logger.info("Creating new symlink")
                     link_path.symlink_to(target_path, target_is_directory=True)
-                elif link_path.resolve() != target_path:
-                    logger.warning("Updating incorrect %s symlink", link_name)
-                    link_path.unlink()
-                    link_path.symlink_to(target_path, target_is_directory=True)
-            else:
-                logger.info("Creating new symlink")
-                link_path.symlink_to(target_path, target_is_directory=True)
-                logger.info("Created %s symlink", link_name)
+                    logger.info("Created %s symlink", link_name)
+            except PermissionError as e:
+                logger.error(
+                    f"Permission denied manipulating symlink: {str(e)}"
+                )
+                raise
+            except FileNotFoundError as e:
+                logger.error(f"Path not found: {str(e)}")
+                raise
+            except OSError as e:
+                logger.error(f"OS error manipulating symlink: {str(e)}")
+                raise
 
             # Verify symlink
-            if not link_path.exists():
-                raise RuntimeError(f"Symlink was not created: {link_path}")
-            if not link_path.is_symlink():
-                raise RuntimeError(
-                    f"Path exists but is not a symlink: {link_path}"
-                )
-            resolved = link_path.resolve()
-            if resolved != target_path:
-                msg = (
-                    f"Symlink points to wrong target: "
-                    f"{resolved} != {target_path}"
-                )
-                raise RuntimeError(msg)
-            logger.info("Symlink verified successfully")
+            try:
+                if not link_path.exists():
+                    raise RuntimeError(f"Symlink was not created: {link_path}")
+                if not link_path.is_symlink():
+                    raise RuntimeError(
+                        f"Path exists but is not a symlink: {link_path}"
+                    )
+                resolved = link_path.resolve()
+                if resolved != target_path:
+                    msg = (
+                        f"Symlink points to wrong target: "
+                        f"{resolved} != {target_path}"
+                    )
+                    raise RuntimeError(msg)
+                logger.info("Symlink verified successfully")
+            except RuntimeError:
+                raise
+            except OSError as e:
+                logger.error(f"Error verifying symlink: {str(e)}")
+                raise
+
+        except (PermissionError, FileNotFoundError, OSError) as e:
+            logger.error(f"File system error creating symlink: {str(e)}")
+            raise
+        except RuntimeError as e:
+            logger.error(f"Runtime error creating symlink: {str(e)}")
+            raise
         except Exception as e:
-            logger.error("Error creating symlink: %s", str(e))
+            logger.error(f"Unexpected error creating symlink: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
             raise
 
     def _create_ignore_file(self) -> None:
         """Create .neuroloraignore file if it doesn't exist."""
-        ignore_file = self.project_root / ".neuroloraignore"
-        if not ignore_file.exists():
-            # Copy default ignore patterns
-            default_ignore = Path(__file__).parent / "default.neuroloraignore"
-            if default_ignore.exists():
-                with open(default_ignore, "r", encoding="utf-8") as src:
-                    with open(ignore_file, "w", encoding="utf-8") as dst:
-                        dst.write(src.read())
-                logger.info("Created .neuroloraignore from default template")
-            else:
-                logger.warning("Default .neuroloraignore template not found")
+        try:
+            ignore_file = self.project_root / ".neuroloraignore"
+            if not ignore_file.exists():
+                # Copy default ignore patterns
+                default_ignore = (
+                    Path(__file__).parent / "default.neuroloraignore"
+                )
+                if default_ignore.exists():
+                    try:
+                        with open(
+                            default_ignore, "r", encoding="utf-8"
+                        ) as src:
+                            content = src.read()
+                        with open(ignore_file, "w", encoding="utf-8") as dst:
+                            dst.write(content)
+                        logger.info(
+                            "Created .neuroloraignore from default template"
+                        )
+                    except PermissionError:
+                        logger.error(
+                            f"Permission denied accessing ignore files: "
+                            f"{ignore_file} or {default_ignore}"
+                        )
+                        raise
+                    except UnicodeDecodeError:
+                        logger.error(
+                            f"Invalid file encoding in template: "
+                            f"{default_ignore}"
+                        )
+                        raise
+                    except IOError as e:
+                        logger.error(f"I/O error with ignore files: {str(e)}")
+                        raise
+                else:
+                    logger.warning(
+                        "Default .neuroloraignore template not found"
+                    )
+        except (PermissionError, UnicodeDecodeError, IOError) as e:
+            logger.error(f"File system error with ignore files: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error with ignore files: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
+            raise
 
     def get_output_path(self, filename: str) -> Path:
         """Get path for output file in project docs directory.

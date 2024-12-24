@@ -115,8 +115,13 @@ async def run_dev_mode() -> None:
 
         except (KeyboardInterrupt, EOFError):
             break
+        except ValueError as e:
+            print(f"Value error: {str(e)}")
+        except TypeError as e:
+            print(f"Type error: {str(e)}")
         except Exception as e:
-            print(f"Error: {str(e)}")
+            print(f"Unexpected error: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
 
     print("\nExiting developer mode")
 
@@ -161,7 +166,8 @@ async def handle_call_tool(
                     TextContent(
                         type="text",
                         text=(
-                            "Error: All items in 'input' list must be strings"
+                            "Error: All items in 'input' list "
+                            "must be strings"
                         ),
                     )
                 ]
@@ -214,12 +220,37 @@ async def handle_call_tool(
             )
         ]
 
-    except Exception:
-        logger.exception("Error collecting code")
+    except (FileNotFoundError, PermissionError, OSError) as e:
+        logger.error(f"File system error collecting code: {str(e)}")
         return [
             TextContent(
                 type="text",
-                text="Failed to collect code. Check server logs for details.",
+                text=f"File system error: {str(e)}",
+            )
+        ]
+    except ValueError as e:
+        logger.error(f"Value error collecting code: {str(e)}")
+        return [
+            TextContent(
+                type="text",
+                text=f"Invalid input: {str(e)}",
+            )
+        ]
+    except TypeError as e:
+        logger.error(f"Type error collecting code: {str(e)}")
+        return [
+            TextContent(
+                type="text",
+                text=f"Type error: {str(e)}",
+            )
+        ]
+    except Exception as e:
+        logger.error(f"Unexpected error collecting code: {str(e)}")
+        logger.debug("Stack trace:", exc_info=True)
+        return [
+            TextContent(
+                type="text",
+                text="An unexpected error occurred. Check server logs for details.",
             )
         ]
 
@@ -235,6 +266,16 @@ async def run(reader: Any, writer: Any, options: Any) -> None:
     try:
         # Start server
         await server.run(reader, writer, options)
+    except ConnectionError as e:
+        logger.error(f"Connection error: {str(e)}")
+        raise RuntimeError(f"Connection error: {str(e)}")
+    except OSError as e:
+        logger.error(f"OS error: {str(e)}")
+        raise RuntimeError(f"OS error: {str(e)}")
+    except ValueError as e:
+        logger.error(f"Value error: {str(e)}")
+        raise RuntimeError(f"Value error: {str(e)}")
     except Exception as e:
-        logger.exception("Server error: %s", str(e))
+        logger.error(f"Unexpected server error: {str(e)}")
+        logger.debug("Stack trace:", exc_info=True)
         raise RuntimeError(f"Server error: {str(e)}")

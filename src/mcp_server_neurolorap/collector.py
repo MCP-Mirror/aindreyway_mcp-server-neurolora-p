@@ -127,8 +127,19 @@ class CodeCollector:
                 logger.info(f"Loaded {len(patterns)} ignore patterns")
             else:
                 logger.info("No .neuroloraignore found, using empty patterns")
+        except FileNotFoundError:
+            logger.warning("Could not find .neuroloraignore file")
+        except PermissionError:
+            logger.error("Permission denied accessing .neuroloraignore")
+        except UnicodeDecodeError:
+            logger.error("Invalid file encoding in .neuroloraignore")
+        except IOError as e:
+            logger.error(f"I/O error reading .neuroloraignore: {str(e)}")
         except Exception as e:
-            logger.error(f"Error loading .neuroloraignore: {str(e)}")
+            logger.error(
+                f"Unexpected error loading .neuroloraignore: {str(e)}"
+            )
+            logger.debug("Stack trace:", exc_info=True)
 
         logger.info(f"Ignore patterns: {patterns}")
         return patterns
@@ -220,8 +231,22 @@ class CodeCollector:
                 if not path.exists():
                     logger.error(f"Path does not exist: {path}")
                     continue
+            except FileNotFoundError:
+                logger.error(f"Path not found: {input_path}")
+                continue
+            except PermissionError:
+                logger.error(f"Permission denied accessing path: {input_path}")
+                continue
+            except OSError as e:
+                logger.error(
+                    f"OS error processing path {input_path}: {str(e)}"
+                )
+                continue
             except Exception as e:
-                logger.error(f"Error processing path {input_path}: {str(e)}")
+                logger.error(
+                    f"Unexpected error processing path {input_path}: {str(e)}"
+                )
+                logger.debug("Stack trace:", exc_info=True)
                 continue
 
             if path.is_file():
@@ -272,12 +297,24 @@ class CodeCollector:
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 return f.read()
+        except FileNotFoundError:
+            logger.error(f"File not found: {file_path}")
+            return "[File not found]"
+        except PermissionError:
+            logger.error(f"Permission denied accessing file: {file_path}")
+            return "[Permission denied]"
         except UnicodeDecodeError:
             logger.warning(f"Binary file detected: {file_path}")
             return "[Binary file content not shown]"
+        except IOError as e:
+            logger.error(f"I/O error reading file {file_path}: {str(e)}")
+            return f"[I/O error: {str(e)}]"
         except Exception as e:
-            logger.error(f"Error reading file {file_path}: {str(e)}")
-            return f"[Error reading file: {str(e)}]"
+            logger.error(
+                f"Unexpected error reading file {file_path}: {str(e)}"
+            )
+            logger.debug("Stack trace:", exc_info=True)
+            return f"[Unexpected error: {str(e)}]"
 
     def collect_code(
         self,
@@ -420,6 +457,19 @@ class CodeCollector:
             )
             return Path(code_output_path)
 
-        except Exception:
-            logger.exception("Error collecting code")
+        except FileNotFoundError as e:
+            logger.error(f"File not found error: {str(e)}")
+            return None
+        except PermissionError as e:
+            logger.error(f"Permission denied error: {str(e)}")
+            return None
+        except OSError as e:
+            logger.error(f"OS error during code collection: {str(e)}")
+            return None
+        except RuntimeError as e:
+            logger.error(f"Runtime error during code collection: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error during code collection: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
             return None
