@@ -129,7 +129,7 @@ async def run_dev_mode() -> None:
 @server.list_tools()
 async def handle_list_tools() -> List[Tool]:
     """List available tools."""
-    logger.info("Listing available tools: code-collector")
+    logger.debug("Listing available tools: code-collector")
     return [
         Tool(
             name=CODE_COLLECTOR_TOOL["name"],
@@ -200,9 +200,9 @@ async def handle_call_tool(
         )
 
         logger.info("Starting code collection")
-        logger.info("Input: %s", input_path)
-        logger.info("Title: %s", title)
-        logger.info("Subproject ID: %s", subproject_id)
+        logger.debug("Input: %s", input_path)
+        logger.debug("Title: %s", title)
+        logger.debug("Subproject ID: %s", subproject_id)
 
         output_file = collector.collect_code(input_path, title)
 
@@ -210,20 +210,24 @@ async def handle_call_tool(
             return [
                 TextContent(
                     type="text",
-                    text="No files found to process or error occurred "
-                    "during collection",
+                    text=(
+                        "No files found to process or error occurred "
+                        "during collection"
+                    ),
                 )
             ]
 
         return [
             TextContent(
                 type="text",
-                text=f"Code collection complete!\nOutput file: {output_file}",
+                text=(
+                    "Code collection complete!\n" f"Output file: {output_file}"
+                ),
             )
         ]
 
     except (FileNotFoundError, PermissionError, OSError) as e:
-        logger.error(f"File system error collecting code: {str(e)}")
+        logger.warning(f"File system error collecting code: {str(e)}")
         return [
             TextContent(
                 type="text",
@@ -231,7 +235,7 @@ async def handle_call_tool(
             )
         ]
     except ValueError as e:
-        logger.error(f"Value error collecting code: {str(e)}")
+        logger.warning(f"Value error collecting code: {str(e)}")
         return [
             TextContent(
                 type="text",
@@ -239,7 +243,7 @@ async def handle_call_tool(
             )
         ]
     except TypeError as e:
-        logger.error(f"Type error collecting code: {str(e)}")
+        logger.warning(f"Type error collecting code: {str(e)}")
         return [
             TextContent(
                 type="text",
@@ -252,7 +256,10 @@ async def handle_call_tool(
         return [
             TextContent(
                 type="text",
-                text="An unexpected error occurred. Check server logs for details.",
+                text=(
+                    "An unexpected error occurred. "
+                    "Check server logs for details."
+                ),
             )
         ]
 
@@ -269,13 +276,13 @@ async def run(reader: Any, writer: Any, options: Any) -> None:
         # Start server
         await server.run(reader, writer, options)
     except ConnectionError as e:
-        logger.error(f"Connection error: {str(e)}")
+        logger.warning(f"Connection error: {str(e)}")
         raise RuntimeError(f"Connection error: {str(e)}")
     except OSError as e:
-        logger.error(f"OS error: {str(e)}")
+        logger.warning(f"OS error: {str(e)}")
         raise RuntimeError(f"OS error: {str(e)}")
     except ValueError as e:
-        logger.error(f"Value error: {str(e)}")
+        logger.warning(f"Value error: {str(e)}")
         raise RuntimeError(f"Value error: {str(e)}")
     except Exception as e:
         logger.error(f"Unexpected server error: {str(e)}")
