@@ -1,0 +1,68 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+
+# Neurolora
+.neurolora/
+.neurolora_*/
+
+# System
+.clinerules
+**/*.lnk
+**/*.symlink
+**/.*link
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Cache
+.mypy_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Environment
+.env
+.venv
+env/
+.env/
+
+# Documentation
+docs/_build/
+
+# Generated files
+*.generated.*
+
+# Neurolora files and symlinks
+.neurolora/
+.neurolora_*/
+FULL_CODE_*.md
+PROMPT_ANALYZE_*.md
+LAST_RESPONSE*
+.clinerules
