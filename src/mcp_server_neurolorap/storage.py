@@ -57,9 +57,10 @@ class StorageManager:
         # Create all required directories immediately
         self._create_directories()
 
-        # Create symlink and ignore file
+        # Create symlink and required files
         self._create_symlinks()
         self._create_ignore_file()
+        self._create_task_files()
 
         # Ensure the project directory exists and is ready
         logger.info(
@@ -235,52 +236,69 @@ class StorageManager:
             logger.debug("Stack trace:", exc_info=True)
             raise
 
-    def _create_ignore_file(self) -> None:
-        """Create .neuroloraignore file if it doesn't exist."""
+    def _create_template_file(
+        self,
+        template_name: str,
+        output_name: str,
+        output_dir: Optional[Path] = None,
+    ) -> None:
+        """Create a file from a template if it doesn't exist.
+
+        Args:
+            template_name: Name of the template file
+            output_name: Name of the output file
+            output_dir: Optional directory for output file.
+                       If not provided, uses project_docs_dir.
+        """
         try:
-            ignore_file = self.project_root / ".neuroloraignore"
-            if not ignore_file.exists():
-                # Copy default ignore patterns
-                default_ignore = (
-                    Path(__file__).parent / "default.neuroloraignore"
+            output_file = (output_dir or self.project_docs_dir) / output_name
+            if not output_file.exists():
+                # Copy from template
+                template_file = (
+                    Path(__file__).parent / "templates" / template_name
                 )
-                if default_ignore.exists():
+                if template_file.exists():
                     try:
-                        with open(
-                            default_ignore, "r", encoding="utf-8"
-                        ) as src:
+                        with open(template_file, "r", encoding="utf-8") as src:
                             content = src.read()
-                        with open(ignore_file, "w", encoding="utf-8") as dst:
+                        with open(output_file, "w", encoding="utf-8") as dst:
                             dst.write(content)
-                        logger.debug(
-                            "Created .neuroloraignore from default template"
-                        )
+                        logger.debug(f"Created {output_name} from template")
                     except PermissionError:
                         logger.error(
-                            f"Permission denied accessing ignore files: "
-                            f"{ignore_file} or {default_ignore}"
+                            f"Permission denied accessing files: "
+                            f"{output_file} or {template_file}"
                         )
                         raise
                     except UnicodeDecodeError:
                         logger.error(
                             f"Invalid file encoding in template: "
-                            f"{default_ignore}"
+                            f"{template_file}"
                         )
                         raise
                     except IOError as e:
-                        logger.error(f"I/O error with ignore files: {str(e)}")
+                        logger.error(f"I/O error with files: {str(e)}")
                         raise
                 else:
-                    logger.warning(
-                        "Default .neuroloraignore template not found"
-                    )
+                    logger.warning(f"Template file not found: {template_file}")
         except (PermissionError, UnicodeDecodeError, IOError) as e:
-            logger.error(f"File system error with ignore files: {str(e)}")
+            logger.error(f"File system error with files: {str(e)}")
             raise
         except Exception as e:
-            logger.error(f"Unexpected error with ignore files: {str(e)}")
+            logger.error(f"Unexpected error with files: {str(e)}")
             logger.debug("Stack trace:", exc_info=True)
             raise
+
+    def _create_ignore_file(self) -> None:
+        """Create .neuroloraignore file if it doesn't exist."""
+        self._create_template_file(
+            "ignore.template", ".neuroloraignore", self.project_root
+        )
+
+    def _create_task_files(self) -> None:
+        """Create TODO.md and DONE.md files if they don't exist."""
+        self._create_template_file("todo.template.md", "TODO.md")
+        self._create_template_file("done.template.md", "DONE.md")
 
     def get_output_path(self, filename: str) -> Path:
         """Get path for output file in project docs directory.
