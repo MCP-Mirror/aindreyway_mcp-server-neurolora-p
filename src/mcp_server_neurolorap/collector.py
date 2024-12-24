@@ -355,15 +355,10 @@ class CodeCollector:
                 f"FULL_CODE_{timestamp}_{path_str}_{title}.md"
             )
 
-            # Create the code collection file
-            import os
-
             # Create parent directory if it doesn't exist
             code_output_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Force sync parent directory
-            os.sync()
-
+            # Write code collection file
             with open(code_output_path, "w", encoding="utf-8") as output_file:
                 # Write header
                 output_file.write(f"# {title}\n\n")
@@ -402,10 +397,6 @@ class CodeCollector:
                     output_file.write(f"```{lang}\n{content}\n```\n\n")
                     logger.info(f"Processed: {relative_path}")
 
-                # Force sync code file
-                output_file.flush()
-                os.fsync(output_file.fileno())
-
             # Create analysis prompt file with timestamp
             analyze_output_path = self.storage.get_output_path(
                 f"PROMPT_ANALYZE_{timestamp}_{path_str}_{title}.md"
@@ -418,25 +409,13 @@ class CodeCollector:
             code_content = self.read_file_content(code_output_path)
             prompt_content = self.read_file_content(prompt_path)
 
-            # Create parent directory if it doesn't exist
-            analyze_output_path.parent.mkdir(parents=True, exist_ok=True)
-
-            # Force sync parent directory
-            os.sync()
-
-            # Then write analysis file
+            # Write analysis file
             with open(
                 analyze_output_path, "w", encoding="utf-8"
             ) as analyze_file:
                 analyze_file.write(prompt_content)
                 analyze_file.write("\n")
                 analyze_file.write(code_content)
-                # Force sync analysis file
-                analyze_file.flush()
-                os.fsync(analyze_file.fileno())
-
-            # Final sync to ensure all writes are complete
-            os.sync()
 
             # Verify files exist and are accessible
             if not code_output_path.exists():
@@ -447,9 +426,6 @@ class CodeCollector:
                 raise RuntimeError(
                     f"Failed to create analysis file: {analyze_output_path}"
                 )
-
-            # Force final sync
-            os.sync()
 
             logger.info(f"Analysis prompt created: {analyze_output_path}")
             logger.info(

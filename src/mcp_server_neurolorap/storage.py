@@ -68,9 +68,6 @@ class StorageManager:
     def _create_directories(self) -> None:
         """Create required directories."""
         try:
-            import os
-            import time
-
             # Create all directories with parents
             try:
                 self.project_docs_dir.mkdir(parents=True, exist_ok=True)
@@ -88,13 +85,17 @@ class StorageManager:
                 logger.error(f"OS error creating directory: {str(e)}")
                 raise
 
-            # Create marker file and force immediate directory availability
+            # Verify directory exists and is accessible
+            if not self.project_docs_dir.exists():
+                raise RuntimeError(
+                    f"Failed to create directory: {self.project_docs_dir}"
+                )
+
+            # Create marker file to indicate initialization
             marker = self.project_docs_dir / ".initialized"
             try:
                 with open(marker, "w") as f:
                     f.write("initialized")
-                    f.flush()
-                    os.fsync(f.fileno())
             except PermissionError:
                 logger.error(
                     f"Permission denied creating marker file: {marker}"
@@ -103,31 +104,6 @@ class StorageManager:
             except IOError as e:
                 logger.error(f"I/O error creating marker file: {str(e)}")
                 raise
-
-            # Force sync to ensure all changes are written
-            os.sync()
-
-            # Verify directory exists and is accessible
-            if not self.project_docs_dir.exists():
-                raise RuntimeError(
-                    f"Failed to create directory: {self.project_docs_dir}"
-                )
-
-            # Wait for directory to be visible in filesystem
-            max_retries = 10
-            retry_delay = 0.1  # seconds
-            for _ in range(max_retries):
-                if self.project_docs_dir.exists():
-                    break
-                time.sleep(retry_delay)
-            else:
-                raise RuntimeError(
-                    f"Directory not visible after {max_retries} retries: "
-                    f"{self.project_docs_dir}"
-                )
-
-            # Final sync
-            os.sync()
 
         except (PermissionError, OSError, IOError) as e:
             logger.error(f"File system error creating directories: {str(e)}")
@@ -143,43 +119,22 @@ class StorageManager:
     def _create_symlinks(self) -> None:
         """Create or update symlinks."""
         try:
-            import os
-            import time
+            # Create symlink to project docs directory
+            self._create_or_update_symlink(
+                self.neurolora_link,
+                self.project_docs_dir,
+                ".neurolora",
+            )
 
-            try:
-                # Create symlink to project docs directory
-                self._create_or_update_symlink(
-                    self.neurolora_link,
-                    self.project_docs_dir,
-                    ".neurolora",
-                )
-                # Force sync to ensure symlink is visible
-                os.sync()
-            except PermissionError as e:
-                logger.error(f"Permission denied creating symlink: {str(e)}")
-                raise
-            except OSError as e:
-                logger.error(f"OS error creating symlink: {str(e)}")
-                raise
-
-            # Wait for symlink to be visible in filesystem
-            max_retries = 10
-            retry_delay = 0.1  # seconds
-            for _ in range(max_retries):
-                if (
-                    self.neurolora_link.exists()
-                    and self.neurolora_link.is_symlink()
-                ):
-                    break
-                time.sleep(retry_delay)
-            else:
+            # Verify symlink was created successfully
+            if not self.neurolora_link.exists():
                 raise RuntimeError(
-                    f"Symlink not visible after {max_retries} retries: "
-                    f"{self.neurolora_link}"
+                    f"Failed to create symlink: {self.neurolora_link}"
                 )
-
-            # Final sync
-            os.sync()
+            if not self.neurolora_link.is_symlink():
+                raise RuntimeError(
+                    f"Path exists but is not a symlink: {self.neurolora_link}"
+                )
 
             logger.info(
                 "Symlink created and verified: %s",
