@@ -11,46 +11,11 @@ This document outlines current issues and improvements needed in the MCP Server 
 
 ## Active Issues
 
-- [ ] Issue 1: Performance Optimization
-- [ ] Issue 2: Logging Level Optimization
-- [ ] Issue 3: Request ID Management
-- [ ] Issue 4: Logging Level Correction
+- [ ] Issue 1: Logging Level Optimization
+- [ ] Issue 2: Request ID Management
+- [ ] Issue 3: Logging Level Correction
 
-### 1. Performance Optimization
-
-**Type**: 🔧 IMPROVE | 🎯 PRIORITY: High | ⚡ EFFORT: Medium
-
-**Problem**:
-
-- Excessive use of `os.sync()` and `time.sleep()`
-- Unnecessary filesystem synchronization
-- Performance degradation
-
-**Required Changes**:
-
-1. Remove redundant sync calls:
-
-```python
-# Before
-os.sync()
-time.sleep(1)
-if os.path.exists(path):
-    # code
-
-# After
-os.makedirs(path, exist_ok=True)
-# Continue with operations
-```
-
-2. Update directory operations to use native Python functionality
-3. Revise test suite to remove unnecessary waits
-
-**Files to Check**:
-
-- src/mcp_server_neurolorap/storage.py
-- src/mcp_server_neurolorap/collector.py
-
-### 2. Logging Level Optimization
+### 1. Logging Level Optimization
 
 **Type**: 🔧 IMPROVE | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
 
@@ -83,7 +48,7 @@ logger.debug(f"Walking directory: {path}")
 - src/mcp_server_neurolorap/collector.py (should_ignore_file function)
 - All files using logger
 
-### 3. Request ID Management
+### 2. Request ID Management
 
 **Type**: 🚨 WARNING | 🎯 PRIORITY: Low | ⚡ EFFORT: Small
 
@@ -113,7 +78,7 @@ self.request_id = next(self._counter)
 
 - src/mcp_server_neurolorap/terminal.py
 
-### 4. Logging Level Correction
+### 3. Logging Level Correction
 
 **Type**: 🚨 WARNING | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
 

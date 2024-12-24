@@ -12,6 +12,7 @@ This document tracks completed tasks and improvements in the MCP Server Neurolor
 ## Completed Tasks
 
 - [x] ~~Issue 1: Exception Handling~~ (Completed in fix/exception-handling)
+- [x] ~~Issue 2: Performance Optimization~~ (Completed in fix/performance-optimization)
 
 ### Exception Handling Improvement
 
@@ -57,3 +58,40 @@ except Exception as e:
 
 **Completion Date**: [Current Date]
 **Branch**: fix/exception-handling
+
+### Performance Optimization
+
+**Type**: 🔧 IMPROVE | 🎯 PRIORITY: High | ⚡ EFFORT: Medium
+
+**Problem**:
+
+- Excessive use of `os.sync()` and `time.sleep()`
+- Unnecessary filesystem synchronization
+- Performance degradation
+
+**Implemented Changes**:
+
+1. Removed redundant sync calls:
+
+```python
+# Before
+os.sync()
+time.sleep(1)
+if os.path.exists(path):
+    # code
+
+# After
+os.makedirs(path, exist_ok=True)
+# Continue with operations
+```
+
+2. Updated directory operations to use native Python functionality
+3. Removed unnecessary file system synchronization
+
+**Files Updated**:
+
+- src/mcp_server_neurolorap/storage.py
+- src/mcp_server_neurolorap/collector.py
+
+**Completion Date**: [Current Date]
+**Branch**: fix/performance-optimization
