@@ -9,41 +9,6 @@ This document outlines current issues and improvements needed in the MCP Server 
 - 🎯 PRIORITY: High/Medium/Low importance tasks
 - ⚡ EFFORT: Small/Medium/Large implementation effort
 
-## Active Issues
-
-- [ ] Issue 1: Logging Level Correction
-
-### 1. Logging Level Correction
-
-**Type**: 🚨 WARNING | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
-
-**Problem**:
-
-- Incorrect use of ERROR level for routine operations
-- Misleading severity levels in logs
-
-**Required Changes**:
-
-1. Update logging levels:
-
-```python
-# Before
-logger.error(f"Tool call: {name}")
-
-# After
-logger.info(f"Tool call: {name}")
-# or
-logger.debug(f"Tool call: {name}")
-```
-
-2. Review and correct all logging statements
-3. Update log monitoring configurations
-
-**Files to Check**:
-
-- src/mcp_server_neurolorap/server.py
-- All files using logger.error()
-
 ## Implementation Guidelines
 
 1. **Testing**:

@@ -15,6 +15,7 @@ This document tracks completed tasks and improvements in the MCP Server Neurolor
 - [x] ~~Issue 2: Performance Optimization~~ (Completed in fix/performance-optimization)
 - [x] ~~Issue 3: Logging Level Optimization~~ (Completed in fix/logging-levels)
 - [x] ~~Issue 4: Request ID Management~~ (Completed in fix/request-id-management)
+- [x] ~~Issue 5: Logging Level Correction~~ (Completed in fix/logging-level-correction)
 
 ### Exception Handling Improvement
 
@@ -178,3 +179,40 @@ request_id = next(self._counter)
 
 **Completion Date**: [Current Date]
 **Branch**: fix/request-id-management
+
+### Logging Level Correction
+
+**Type**: 🚨 WARNING | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
+
+**Problem**:
+
+- Incorrect use of ERROR level for routine operations
+- Misleading severity levels in logs
+
+**Implemented Changes**:
+
+1. Updated logging levels:
+
+```python
+# Before
+logger.error(f"File system error collecting code: {str(e)}")
+
+# After
+logger.warning(f"File system error collecting code: {str(e)}")
+```
+
+2. Corrected logging hierarchy:
+
+   - ERROR: Only for unexpected errors that need immediate attention
+   - WARNING: For expected errors (FileNotFound, Permission, etc.)
+   - INFO: For significant events (start/end of operations)
+   - DEBUG: For detailed operational data
+
+3. Improved error message formatting for better readability
+
+**Files Updated**:
+
+- src/mcp_server_neurolorap/server.py
+
+**Completion Date**: [Current Date]
+**Branch**: fix/logging-level-correction
