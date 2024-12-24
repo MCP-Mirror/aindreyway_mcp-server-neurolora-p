@@ -11,44 +11,10 @@ This document outlines current issues and improvements needed in the MCP Server 
 
 ## Active Issues
 
-- [ ] Issue 1: Logging Level Optimization
-- [ ] Issue 2: Request ID Management
-- [ ] Issue 3: Logging Level Correction
+- [ ] Issue 1: Request ID Management
+- [ ] Issue 2: Logging Level Correction
 
-### 1. Logging Level Optimization
-
-**Type**: 🔧 IMPROVE | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
-
-**Problem**:
-
-- Excessive INFO level logging
-- Log clutter in should_ignore_file
-- Performance impact during large scans
-
-**Required Changes**:
-
-1. Adjust logging levels:
-
-```python
-# Before
-logger.info(f"Walking directory: {path}")
-
-# After
-logger.debug(f"Walking directory: {path}")
-```
-
-2. Define clear logging hierarchy:
-   - ERROR: Only for actual errors that need immediate attention
-   - WARNING: For concerning but non-critical issues
-   - INFO: For significant events (start/end of operations)
-   - DEBUG: For detailed operational data
-
-**Files to Check**:
-
-- src/mcp_server_neurolorap/collector.py (should_ignore_file function)
-- All files using logger
-
-### 2. Request ID Management
+### 1. Request ID Management
 
 **Type**: 🚨 WARNING | 🎯 PRIORITY: Low | ⚡ EFFORT: Small
 
@@ -78,7 +44,7 @@ self.request_id = next(self._counter)
 
 - src/mcp_server_neurolorap/terminal.py
 
-### 3. Logging Level Correction
+### 2. Logging Level Correction
 
 **Type**: 🚨 WARNING | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
 
