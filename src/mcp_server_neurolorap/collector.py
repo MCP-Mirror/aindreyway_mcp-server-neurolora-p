@@ -124,9 +124,9 @@ class CodeCollector:
                         # Skip empty lines and comments
                         if line and not line.startswith("#"):
                             patterns.append(line)
-                logger.info(f"Loaded {len(patterns)} ignore patterns")
+                logger.debug(f"Loaded {len(patterns)} ignore patterns")
             else:
-                logger.info("No .neuroloraignore found, using empty patterns")
+                logger.debug("No .neuroloraignore found, using empty patterns")
         except FileNotFoundError:
             logger.warning("Could not find .neuroloraignore file")
         except PermissionError:
@@ -141,7 +141,7 @@ class CodeCollector:
             )
             logger.debug("Stack trace:", exc_info=True)
 
-        logger.info(f"Ignore patterns: {patterns}")
+        logger.debug(f"Ignore patterns: {patterns}")
         return patterns
 
     def should_ignore_file(self, file_path: Path) -> bool:
@@ -156,10 +156,10 @@ class CodeCollector:
         # Get relative path from project root
         try:
             relative_path = file_path.relative_to(self.project_root)
-            logger.info(f"Checking relative path: {relative_path}")
+            logger.debug(f"Checking relative path: {relative_path}")
         except ValueError:
             relative_path = file_path
-            logger.info(f"Using absolute path: {relative_path}")
+            logger.debug(f"Using absolute path: {relative_path}")
 
         str_path = str(relative_path)
 
@@ -168,7 +168,7 @@ class CodeCollector:
             # Handle directory patterns (ending with /)
             if pattern.endswith("/"):
                 if any(part == pattern[:-1] for part in relative_path.parts):
-                    logger.info(
+                    logger.debug(
                         f"Ignoring {str_path} (matches dir pattern {pattern})"
                     )
                     return True
@@ -176,20 +176,20 @@ class CodeCollector:
             elif fnmatch.fnmatch(str_path, pattern) or fnmatch.fnmatch(
                 file_path.name, pattern
             ):
-                logger.info(
+                logger.debug(
                     f"Ignoring {str_path} (matches file pattern {pattern})"
                 )
                 return True
 
         # Additional checks
         if "FULL_CODE_" in str(file_path):
-            logger.info(f"Ignoring {str_path} (generated file)")
+            logger.debug(f"Ignoring {str_path} (generated file)")
             return True
         if file_path.stat().st_size > 1024 * 1024:  # Skip files > 1MB
-            logger.info(f"Ignoring {str_path} (too large)")
+            logger.debug(f"Ignoring {str_path} (too large)")
             return True
 
-        logger.info(f"Including {str_path}")
+        logger.debug(f"Including {str_path}")
         return False
 
     def make_anchor(self, path: Path) -> str:
@@ -219,7 +219,7 @@ class CodeCollector:
         if isinstance(input_paths, str):
             input_paths = [input_paths]
 
-        logger.info(f"Processing input paths: {input_paths}")
+        logger.debug(f"Processing input paths: {input_paths}")
         for input_path in input_paths:
             try:
                 path = Path(input_path).resolve()
@@ -255,14 +255,14 @@ class CodeCollector:
             else:
                 for root, dirs, files in os.walk(path):
                     root_path = Path(root)
-                    logger.info(f"Walking directory: {root_path}")
+                    logger.debug(f"Walking directory: {root_path}")
                     # Remove ignored directories in-place
                     dirs[:] = [
                         d
                         for d in dirs
                         if not self.should_ignore_file(root_path / d)
                     ]
-                    logger.info(f"Filtered directories: {dirs}")
+                    logger.debug(f"Filtered directories: {dirs}")
 
                     for file in sorted(files):
                         file_path = root_path / file
@@ -282,7 +282,7 @@ class CodeCollector:
 
         sorted_files = sorted(all_files, key=sort_key)
         logger.info(f"Found {len(sorted_files)} files to process")
-        logger.info(f"Files to process: {sorted_files}")
+        logger.debug(f"Files to process: {sorted_files}")
         return sorted_files
 
     def read_file_content(self, file_path: Path) -> str:
@@ -395,7 +395,7 @@ class CodeCollector:
 
                     output_file.write(f"### {relative_path} {{{anchor}}}\n")
                     output_file.write(f"```{lang}\n{content}\n```\n\n")
-                    logger.info(f"Processed: {relative_path}")
+                    logger.debug(f"Processed: {relative_path}")
 
             # Create analysis prompt file with timestamp
             analyze_output_path = self.storage.get_output_path(
@@ -427,10 +427,9 @@ class CodeCollector:
                     f"Failed to create analysis file: {analyze_output_path}"
                 )
 
-            logger.info(f"Analysis prompt created: {analyze_output_path}")
-            logger.info(
-                f"Code collection complete! Created: {code_output_path}"
-            )
+            logger.debug(f"Analysis prompt created: {analyze_output_path}")
+            logger.info("Code collection complete!")
+            logger.debug(f"Output file: {code_output_path}")
             return Path(code_output_path)
 
         except FileNotFoundError as e:

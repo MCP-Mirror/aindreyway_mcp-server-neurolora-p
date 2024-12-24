@@ -145,8 +145,8 @@ async def handle_call_tool(
 ) -> List[TextContent]:
     """Handle tool execution requests."""
     # Log request details for debugging
-    logger.error(f"Tool call: {name}")
-    logger.error(f"Arguments: {arguments}")
+    logger.debug(f"Tool call: {name}")
+    logger.debug(f"Arguments: {arguments}")
     if not arguments:
         return [
             TextContent(type="text", text="Error: Missing required arguments")
@@ -176,7 +176,9 @@ async def handle_call_tool(
             return [
                 TextContent(
                     type="text",
-                    text="Error: 'input' must be a string or list of strings",
+                    text=(
+                        "Error: 'input' must be a string " "or list of strings"
+                    ),
                 )
             ]
         title = str(arguments.get("title", "Code Collection"))

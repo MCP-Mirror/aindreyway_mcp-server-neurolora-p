@@ -29,6 +29,7 @@ class StorageManager:
                         If provided, will be appended to project name.
         """
         self.project_root = project_root or Path.cwd()
+        logger.info("Initializing storage manager")
         logger.debug("Project root: %s", self.project_root)
 
         # Get project name and handle subproject
@@ -49,6 +50,7 @@ class StorageManager:
         logger.debug("Project name: %s", self.project_name)
         logger.debug("Project docs dir: %s", self.project_docs_dir)
         logger.debug("Neurolora link: %s", self.neurolora_link)
+        logger.info("Storage manager initialized")
 
     def setup(self) -> None:
         """Setup storage structure and symlinks."""
@@ -161,7 +163,7 @@ class StorageManager:
             target_path: Path that symlink should point to
             link_name: Name of the symlink for logging
         """
-        logger.info(
+        logger.debug(
             "Creating symlink: %s -> %s",
             link_path,
             target_path,
@@ -169,7 +171,7 @@ class StorageManager:
         try:
             try:
                 if link_path.exists():
-                    logger.info("Link path exists: %s", link_path)
+                    logger.debug("Link path exists: %s", link_path)
                     if not link_path.is_symlink():
                         logger.warning("Removing non-symlink %s", link_name)
                         link_path.unlink()
@@ -185,9 +187,9 @@ class StorageManager:
                             target_path, target_is_directory=True
                         )
                 else:
-                    logger.info("Creating new symlink")
+                    logger.debug("Creating new symlink")
                     link_path.symlink_to(target_path, target_is_directory=True)
-                    logger.info("Created %s symlink", link_name)
+                    logger.debug("Created %s symlink", link_name)
             except PermissionError as e:
                 logger.error(
                     f"Permission denied manipulating symlink: {str(e)}"
@@ -215,7 +217,7 @@ class StorageManager:
                         f"{resolved} != {target_path}"
                     )
                     raise RuntimeError(msg)
-                logger.info("Symlink verified successfully")
+                logger.debug("Symlink verified successfully")
             except RuntimeError:
                 raise
             except OSError as e:
@@ -250,7 +252,7 @@ class StorageManager:
                             content = src.read()
                         with open(ignore_file, "w", encoding="utf-8") as dst:
                             dst.write(content)
-                        logger.info(
+                        logger.debug(
                             "Created .neuroloraignore from default template"
                         )
                     except PermissionError:
