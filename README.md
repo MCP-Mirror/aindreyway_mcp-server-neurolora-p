@@ -1,6 +1,8 @@
 # MCP Server Neurolorap
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml/badge.svg)](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/aindreyway/mcp-server-neurolorap/branch/main/graph/badge.svg)](https://codecov.io/gh/aindreyway/mcp-server-neurolorap)
 
 MCP server for collecting code from files and directories into a single markdown document.
 
@@ -194,11 +196,88 @@ python -m mcp_server_neurolorap
 python -m mcp_server_neurolorap --dev
 ```
 
-5. Run tests:
+### Testing
+
+The project uses pytest for testing and includes comprehensive test coverage:
 
 ```sh
+# Run all tests
 pytest
+
+# Run with coverage report
+pytest --cov=mcp_server_neurolorap
+
+# Run specific test categories
+pytest -m unit          # Unit tests only
+pytest -m integration   # Integration tests only
+pytest -m "not slow"    # Skip slow tests
+
+# Run tests in parallel
+pytest -n auto
+
+# Run with test timing
+pytest --durations=10
+
+# Generate HTML coverage report
+pytest --cov=mcp_server_neurolorap --cov-report=html
 ```
+
+Test categories:
+
+- **Unit Tests**: Test individual components in isolation
+- **Integration Tests**: Test component interactions
+- **Performance Tests**: Test system performance under load
+- **Security Tests**: Test security measures and vulnerabilities
+
+Test files are organized by component:
+
+```
+tests/
+├── unit/                 # Unit tests
+│   ├── test_collector.py # Tests for collector.py
+│   ├── test_storage.py  # Tests for storage.py
+│   ├── test_server.py   # Tests for server.py
+│   └── test_terminal.py # Tests for terminal.py
+└── integration/         # Integration tests
+```
+
+### Code Quality
+
+The project maintains high code quality standards through various tools:
+
+```sh
+# Format code
+black .
+
+# Sort imports
+isort .
+
+# Lint code
+flake8 .
+
+# Type check
+mypy src tests
+
+# Security check
+bandit -r src/
+safety check
+```
+
+All these checks are run automatically on pull requests through GitHub Actions.
+
+### CI/CD Pipeline
+
+The project uses GitHub Actions for continuous integration and deployment:
+
+- Runs tests on Python 3.10, 3.11, and 3.12
+- Checks code formatting and style
+- Performs type checking
+- Runs security scans
+- Generates coverage reports
+- Builds and validates package
+- Uploads test artifacts
+
+The pipeline must pass before merging any changes.
 
 ## License
 

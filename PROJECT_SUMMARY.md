@@ -34,8 +34,12 @@ mcp-server-neurolorap/
 │       ├── types.py            # Type definitions
 │       ├── default.neuroloraignore  # Default ignore patterns
 │       └── py.typed             # Type hints marker
-├── tests/                     # Test directory (to be implemented)
+├── tests/                     # Test directory
 │   ├── unit/                 # Unit tests
+│   │   ├── test_collector.py # Tests for collector.py
+│   │   ├── test_storage.py  # Tests for storage.py
+│   │   ├── test_server.py   # Tests for server.py
+│   │   └── test_terminal.py # Tests for terminal.py
 │   └── integration/         # Integration tests
 ├── pyproject.toml            # Project configuration
 ├── README.md                # User documentation
@@ -104,45 +108,131 @@ mcp-server-neurolorap/
    - Default ignore patterns
    - Language mappings
 
+## Testing
+
+The project uses pytest for testing and includes comprehensive test coverage across multiple categories:
+
+### Test Structure
+
+```
+tests/
+├── unit/                 # Unit tests
+│   ├── test_collector.py # Tests for collector.py
+│   ├── test_storage.py  # Tests for storage.py
+│   ├── test_server.py   # Tests for server.py
+│   └── test_terminal.py # Tests for terminal.py
+└── integration/         # Integration tests
+```
+
+### Test Categories
+
+1. **Unit Tests**
+
+   - Test individual components in isolation
+   - Mock external dependencies
+   - Focus on edge cases and error handling
+   - Verify type annotations and interfaces
+   - Test each public method and class
+
+2. **Integration Tests**
+
+   - Test component interactions
+   - Verify file system operations
+   - Test JSON-RPC protocol compliance
+   - Validate MCP tool functionality
+   - Test error propagation between components
+
+3. **Performance Tests**
+
+   - Test system performance under load
+   - Measure file processing speed
+   - Monitor memory usage patterns
+   - Test concurrent operations
+   - Verify resource cleanup
+
+4. **Security Tests**
+   - Test input validation
+   - Verify file permissions
+   - Test path traversal prevention
+   - Check symlink handling
+   - Validate error messages
+
+### Test Infrastructure
+
+1. **Tools and Libraries**
+
+   - pytest for test framework
+   - pytest-asyncio for async tests
+   - pytest-cov for coverage reporting
+   - pytest-xdist for parallel execution
+   - pytest-timeout for test timeouts
+   - pytest-randomly for random ordering
+
+2. **CI/CD Integration**
+
+   - GitHub Actions workflow
+   - Automated test execution
+   - Coverage reporting
+   - Code quality checks
+   - Security scanning
+
+3. **Coverage Requirements**
+   - Minimum 80% code coverage
+   - All public interfaces tested
+   - Error paths verified
+   - Edge cases covered
+   - Documentation examples tested
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=mcp_server_neurolorap
+
+# Run specific categories
+pytest -m unit          # Unit tests
+pytest -m integration   # Integration tests
+pytest -m "not slow"    # Skip slow tests
+
+# Run in parallel
+pytest -n auto
+
+# Show test timing
+pytest --durations=10
+
+# Generate coverage report
+pytest --cov-report=html
+```
+
 ## Task List
-
-### Core Functionality
-
-- [x] Set up project structure
-- [x] Implement MCP server using FastMCP
-- [x] Create code collector class
-- [x] Add language detection
-- [x] Implement ignore patterns
-- [x] Generate markdown output
-- [x] Add table of contents
-- [x] Support multiple input paths
-
-### Documentation
-
-- [x] Create README.md
-- [x] Add PROJECT_SUMMARY.md
-- [x] Document code with docstrings
-- [x] Add type hints
-
-### Development
-
-- [x] Configure development tools
-  - [x] black for formatting
-  - [x] isort for import sorting
-  - [x] flake8 for linting
-  - [x] mypy for type checking with strict mode
-- [x] Set up virtual environment (.venv)
-- [x] Add package dependencies
-  - [x] mcp (Python SDK for MCP)
-  - [x] markdown for document generation
-  - [x] pygments for syntax highlighting
-  - [x] typing-extensions for enhanced type hints
 
 ### Testing
 
-- [ ] Add unit tests
+- [x] Set up test infrastructure
+  - [x] Configure pytest
+  - [x] Add coverage reporting
+  - [x] Set up CI/CD pipeline
+  - [x] Add test categories
+- [x] Add unit tests
+  - [x] Test collector functionality
+  - [x] Test storage operations
+  - [x] Test server implementation
+  - [x] Test terminal interface
 - [ ] Add integration tests
-- [ ] Add test documentation
+  - [ ] Test component interactions
+  - [ ] Test file system operations
+  - [ ] Test error propagation
+- [ ] Add performance tests
+  - [ ] Test system under load
+  - [ ] Measure resource usage
+  - [ ] Test concurrent operations
+- [ ] Add security tests
+  - [ ] Test input validation
+  - [ ] Test file permissions
+  - [ ] Test path traversal prevention
 
 ### Developer Mode
 

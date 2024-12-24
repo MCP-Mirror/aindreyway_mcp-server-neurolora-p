@@ -16,6 +16,11 @@ license = { text = "MIT" }
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
+    "pytest-asyncio>=0.23.0",  # For async tests
+    "pytest-cov>=4.1.0",       # For coverage reporting
+    "pytest-xdist>=3.5.0",     # For parallel test execution
+    "pytest-timeout>=2.2.0",   # For test timeouts
+    "pytest-randomly>=3.15.0", # For random test ordering
     "black>=23.12.1",
     "flake8>=7.0.0",
     "isort>=5.13.2",
@@ -84,3 +89,55 @@ ignore_missing_imports = true
 max-line-length = 79
 extend-ignore = "E203"
 exclude = [".git", "__pycache__", "build", "dist"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = """
+    --strict-markers
+    --strict-config
+    --tb=short
+    --cov=mcp_server_neurolorap
+    --cov-report=term-missing
+    --cov-report=html
+    --cov-report=xml
+    --no-cov-on-fail
+    --randomly-seed=1234
+    --randomly-dont-reset-seed
+    -v
+"""
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+markers = [
+    "slow: marks tests as slow",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+timeout = 300
+
+[tool.coverage.run]
+branch = true
+source = ["mcp_server_neurolorap"]
+omit = [
+    "tests/*",
+    "setup.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "pass",
+    "raise ImportError",
+]
+ignore_errors = true
+fail_under = 80
+show_missing = true
+
+[tool.coverage.html]
+directory = "coverage_html"
