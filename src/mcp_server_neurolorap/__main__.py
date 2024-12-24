@@ -13,10 +13,7 @@ from pathlib import Path
 from types import FrameType
 from typing import Dict, TypedDict, cast
 
-from mcp_server_neurolorap.server import (
-    create_initialization_options,
-    run as server_run,
-)
+from mcp_server_neurolorap.server import create_server, run_dev_mode
 
 # Global flag for graceful shutdown
 shutdown_requested = False
@@ -36,14 +33,16 @@ def handle_shutdown(signum: int, frame: FrameType | None) -> None:
 
 # Configure root logger for terminal output
 root_logger = logging.getLogger()
-root_logger.setLevel(logging.DEBUG)
+root_logger.setLevel(logging.INFO)
 
 # Create console handler for terminal output
 console_handler = logging.StreamHandler(sys.stderr)
-console_handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
+console_handler.setFormatter(logging.Formatter("%(message)s"))
 root_logger.addHandler(console_handler)
+
+# Configure MCP logger
+mcp_logger = logging.getLogger("mcp")
+mcp_logger.setLevel(logging.WARNING)
 
 # Get module logger
 logger = logging.getLogger(__name__)
@@ -110,7 +109,11 @@ def configure_cline() -> None:
             "args": ["-m", "mcp_server_neurolorap"],
             "disabled": False,
             "alwaysAllow": [],
-            "env": {"PYTHONPATH": str(project_root), "PYTHONUNBUFFERED": "1"},
+            "env": {
+                "PYTHONPATH": str(project_root),
+                "PYTHONUNBUFFERED": "1",
+                "MCP_PROJECT_ROOT": str(project_root),
+            },
         }
 
         if server_name not in config["mcpServers"]:
@@ -132,14 +135,13 @@ def configure_cline() -> None:
         logger.warning(f"Failed to configure Cline: {e}")
 
 
-async def main() -> None:
+def main() -> None:
     """Run the server with stdio transport or in developer mode."""
     # Check for developer mode
     if len(sys.argv) > 1 and sys.argv[1] == "--dev":
-        from mcp_server_neurolorap.server import run_dev_mode
-
-        await run_dev_mode()
+        asyncio.run(run_dev_mode())
         return
+
     try:
         # Configure Cline integration
         configure_cline()
@@ -148,16 +150,9 @@ async def main() -> None:
         signal.signal(signal.SIGINT, handle_shutdown)
         signal.signal(signal.SIGTERM, handle_shutdown)
 
-        # Create and run server with stdio transport
-        from mcp.server.stdio import stdio_server
-
-        async with stdio_server() as transport:
-            if not shutdown_requested:
-                await server_run(
-                    transport[0],
-                    transport[1],
-                    create_initialization_options(),
-                )
+        # Create and run server
+        server = create_server()
+        server.run()
 
     except Exception as e:
         error_msg = (
@@ -177,7 +172,7 @@ def main_entry() -> None:
     - Developer mode: Run with JSON-RPC terminal (use --dev flag)
     """
     try:
-        asyncio.run(main())
+        main()
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception:

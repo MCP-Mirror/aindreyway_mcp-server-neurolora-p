@@ -1,17 +1,11 @@
+# Git
+.git/
+.gitignore
+
 # Dependencies
 node_modules/
 .venv/
 venv/
-
-# Neurolora
-.neurolora/
-.neurolora_*/
-
-# System
-.clinerules
-**/*.lnk
-**/*.symlink
-**/.*link
 
 # Build
 dist/
@@ -24,7 +18,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
 *.so
 
 # IDE
@@ -49,20 +42,9 @@ htmlcov/
 
 # Environment
 .env
-.venv
 env/
-.env/
-
-# Documentation
-docs/_build/
 
 # Generated files
-*.generated.*
-
-# Neurolora files and symlinks
-.neurolora/
-.neurolora_*/
 FULL_CODE_*.md
 PROMPT_ANALYZE_*.md
 LAST_RESPONSE*
-.clinerules

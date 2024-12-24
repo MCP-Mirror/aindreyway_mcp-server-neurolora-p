@@ -1,7 +1,6 @@
 """MCP server for code collection."""
 
-from mcp.types import Tool, TextContent
 from mcp_server_neurolorap.collector import CodeCollector
-from mcp_server_neurolorap.server import server
+from mcp_server_neurolorap.server import create_server, run_dev_mode
 
-__all__ = ["CodeCollector", "Tool", "TextContent", "server"]
+__all__ = ["CodeCollector", "create_server", "run_dev_mode"]

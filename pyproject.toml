@@ -30,7 +30,12 @@ package-dir = {"" = "src"}
 include-package-data = true
 
 [tool.setuptools.package-data]
-mcp_server_neurolorap = ["py.typed", "default.neuroloraignore"]
+mcp_server_neurolorap = [
+    "py.typed",
+    "templates/ignore.template",
+    "templates/todo.template.md",
+    "templates/done.template.md"
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -40,7 +45,7 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [project.scripts]
-mcp-server-neurolorap = "mcp_server_neurolorap.__main__:run"
+mcp-server-neurolorap = "mcp_server_neurolorap.__main__:main_entry"
 
 [tool.black]
 line-length = 79

@@ -6,6 +6,7 @@ viewing their output directly in the terminal.
 """
 
 from itertools import count
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from mcp_server_neurolorap.collector import CodeCollector
@@ -28,9 +29,10 @@ class JsonRpcTerminal:
         - Future versions may add async command execution
     """
 
-    def __init__(self) -> None:
+    def __init__(self, project_root: str | None = None) -> None:
         self._counter = count()
-        self.collector = CodeCollector()
+        self.project_root = Path(project_root) if project_root else None
+        self.collector = CodeCollector(project_root=self.project_root)
         # Dictionary to store available commands and their handlers
         self.commands: Dict[str, Any] = (
             {  # Any used because of different return types
@@ -152,9 +154,10 @@ class JsonRpcTerminal:
         if len(params) > 1:
             subproject_id = params[1].strip("\"'")
 
-        # Create collector with subproject_id
+        # Create collector with project_root and subproject_id
         collector = CodeCollector(
-            project_root=None, subproject_id=subproject_id
+            project_root=self.project_root if self.project_root else None,
+            subproject_id=subproject_id,
         )
 
         output_file = collector.collect_code(path, "Code Collection")

@@ -5,6 +5,7 @@ Neurolora project.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -36,16 +37,16 @@ class StorageManager:
         base_name = self.project_root.name
         if subproject_id:
             self.project_name = f"{base_name}-{subproject_id}"
-            self.neurolora_link = (
-                self.project_root / f".neurolora_{subproject_id}"
-            )
         else:
             self.project_name = base_name
-            self.neurolora_link = self.project_root / ".neurolora"
 
-        # Setup paths
+        # Setup paths according to project structure
         self.mcp_docs_dir = Path.home() / ".mcp-docs"
         self.project_docs_dir = self.mcp_docs_dir / self.project_name
+        self.neurolora_link = self.project_root / ".neurolora"
+
+        # Ensure mcp_docs_dir exists
+        self.mcp_docs_dir.mkdir(parents=True, exist_ok=True)
 
         logger.debug("Project name: %s", self.project_name)
         logger.debug("Project docs dir: %s", self.project_docs_dir)
@@ -72,21 +73,21 @@ class StorageManager:
         """Create required directories."""
         try:
             # Create all directories with parents
-            try:
-                self.project_docs_dir.mkdir(parents=True, exist_ok=True)
-                logger.info(
-                    "Created/verified project directory: %s",
-                    self.project_docs_dir,
-                )
-            except PermissionError:
-                logger.error(
-                    f"Permission denied creating directory: "
-                    f"{self.project_docs_dir}"
-                )
-                raise
-            except OSError as e:
-                logger.error(f"OS error creating directory: {str(e)}")
-                raise
+            self.project_docs_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                "Created/verified project directory: %s",
+                self.project_docs_dir,
+            )
+
+            # Create marker file and force immediate directory availability
+            marker = self.project_docs_dir / ".initialized"
+            with open(marker, "w") as f:
+                f.write("initialized")
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Force sync to ensure all changes are written
+            os.sync()
 
             # Verify directory exists and is accessible
             if not self.project_docs_dir.exists():
@@ -94,64 +95,66 @@ class StorageManager:
                     f"Failed to create directory: {self.project_docs_dir}"
                 )
 
-            # Create marker file to indicate initialization
-            marker = self.project_docs_dir / ".initialized"
-            try:
-                with open(marker, "w") as f:
-                    f.write("initialized")
-            except PermissionError:
-                logger.error(
-                    f"Permission denied creating marker file: {marker}"
-                )
-                raise
-            except IOError as e:
-                logger.error(f"I/O error creating marker file: {str(e)}")
-                raise
+            # Wait for directory to be visible in filesystem
+            import time
 
-        except (PermissionError, OSError, IOError) as e:
-            logger.error(f"File system error creating directories: {str(e)}")
-            raise
-        except RuntimeError as e:
-            logger.error(f"Runtime error creating directories: {str(e)}")
-            raise
+            max_retries = 10
+            retry_delay = 0.1  # seconds
+            for _ in range(max_retries):
+                if self.project_docs_dir.exists():
+                    break
+                time.sleep(retry_delay)
+            else:
+                raise RuntimeError(
+                    f"Directory not visible after {max_retries} retries: "
+                    f"{self.project_docs_dir}"
+                )
+
+            # Final sync
+            os.sync()
         except Exception as e:
-            logger.error(f"Unexpected error creating directories: {str(e)}")
-            logger.debug("Stack trace:", exc_info=True)
+            logger.error("Error creating directories: %s", str(e))
             raise
 
     def _create_symlinks(self) -> None:
         """Create or update symlinks."""
         try:
-            # Create symlink to project docs directory
+            # Create symlink from project root to project docs directory
             self._create_or_update_symlink(
                 self.neurolora_link,
                 self.project_docs_dir,
                 ".neurolora",
             )
+            # Force sync to ensure symlink is visible
+            os.sync()
 
-            # Verify symlink was created successfully
-            if not self.neurolora_link.exists():
+            # Wait for symlink to be visible in filesystem
+            import time
+
+            max_retries = 10
+            retry_delay = 0.1  # seconds
+            for _ in range(max_retries):
+                if (
+                    self.neurolora_link.exists()
+                    and self.neurolora_link.is_symlink()
+                ):
+                    break
+                time.sleep(retry_delay)
+            else:
                 raise RuntimeError(
-                    f"Failed to create symlink: {self.neurolora_link}"
+                    f"Symlink not visible after {max_retries} retries: "
+                    f"{self.neurolora_link}"
                 )
-            if not self.neurolora_link.is_symlink():
-                raise RuntimeError(
-                    f"Path exists but is not a symlink: {self.neurolora_link}"
-                )
+
+            # Final sync
+            os.sync()
 
             logger.info(
                 "Symlink created and verified: %s",
                 self.neurolora_link,
             )
-        except (PermissionError, OSError) as e:
-            logger.error(f"File system error creating symlinks: {str(e)}")
-            raise
-        except RuntimeError as e:
-            logger.error(f"Runtime error creating symlinks: {str(e)}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error creating symlinks: {str(e)}")
-            logger.debug("Stack trace:", exc_info=True)
+            logger.error("Error creating symlinks: %s", str(e))
             raise
 
     def _create_or_update_symlink(
@@ -170,70 +173,49 @@ class StorageManager:
             target_path,
         )
         try:
-            try:
-                if link_path.exists():
-                    logger.debug("Link path exists: %s", link_path)
-                    if not link_path.is_symlink():
-                        logger.warning("Removing non-symlink %s", link_name)
-                        link_path.unlink()
-                        link_path.symlink_to(
-                            target_path, target_is_directory=True
-                        )
-                    elif link_path.resolve() != target_path:
-                        logger.warning(
-                            "Updating incorrect %s symlink", link_name
-                        )
-                        link_path.unlink()
-                        link_path.symlink_to(
-                            target_path, target_is_directory=True
-                        )
-                else:
-                    logger.debug("Creating new symlink")
-                    link_path.symlink_to(target_path, target_is_directory=True)
-                    logger.debug("Created %s symlink", link_name)
-            except PermissionError as e:
-                logger.error(
-                    f"Permission denied manipulating symlink: {str(e)}"
-                )
-                raise
-            except FileNotFoundError as e:
-                logger.error(f"Path not found: {str(e)}")
-                raise
-            except OSError as e:
-                logger.error(f"OS error manipulating symlink: {str(e)}")
-                raise
+            # Ensure target directory exists
+            target_path.mkdir(parents=True, exist_ok=True)
+
+            # Create relative symlink
+            relative_target = os.path.relpath(target_path, link_path.parent)
+
+            if link_path.exists():
+                logger.debug("Link path exists: %s", link_path)
+                if not link_path.is_symlink():
+                    logger.warning("Removing non-symlink %s", link_name)
+                    link_path.unlink()
+                    link_path.symlink_to(
+                        relative_target, target_is_directory=True
+                    )
+                elif link_path.resolve() != target_path:
+                    logger.warning("Updating incorrect %s symlink", link_name)
+                    link_path.unlink()
+                    link_path.symlink_to(
+                        relative_target, target_is_directory=True
+                    )
+            else:
+                logger.debug("Creating new symlink")
+                link_path.symlink_to(relative_target, target_is_directory=True)
+                logger.debug("Created %s symlink", link_name)
 
             # Verify symlink
-            try:
-                if not link_path.exists():
-                    raise RuntimeError(f"Symlink was not created: {link_path}")
-                if not link_path.is_symlink():
-                    raise RuntimeError(
-                        f"Path exists but is not a symlink: {link_path}"
-                    )
-                resolved = link_path.resolve()
-                if resolved != target_path:
-                    msg = (
-                        f"Symlink points to wrong target: "
-                        f"{resolved} != {target_path}"
-                    )
-                    raise RuntimeError(msg)
-                logger.debug("Symlink verified successfully")
-            except RuntimeError:
-                raise
-            except OSError as e:
-                logger.error(f"Error verifying symlink: {str(e)}")
-                raise
+            if not link_path.exists():
+                raise RuntimeError(f"Symlink was not created: {link_path}")
+            if not link_path.is_symlink():
+                raise RuntimeError(
+                    f"Path exists but is not a symlink: {link_path}"
+                )
+            resolved = link_path.resolve()
+            if resolved != target_path:
+                msg = (
+                    f"Symlink points to wrong target: "
+                    f"{resolved} != {target_path}"
+                )
+                raise RuntimeError(msg)
+            logger.debug("Symlink verified successfully")
 
-        except (PermissionError, FileNotFoundError, OSError) as e:
-            logger.error(f"File system error creating symlink: {str(e)}")
-            raise
-        except RuntimeError as e:
-            logger.error(f"Runtime error creating symlink: {str(e)}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error creating symlink: {str(e)}")
-            logger.debug("Stack trace:", exc_info=True)
+            logger.error("Error creating symlink: %s", str(e))
             raise
 
     def _create_template_file(

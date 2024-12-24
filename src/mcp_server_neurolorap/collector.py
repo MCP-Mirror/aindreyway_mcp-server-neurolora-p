@@ -222,7 +222,13 @@ class CodeCollector:
         logger.debug(f"Processing input paths: {input_paths}")
         for input_path in input_paths:
             try:
-                path = Path(input_path).resolve()
+                # Convert relative path to absolute using project_root
+                path = Path(input_path)
+                if not path.is_absolute():
+                    path = (self.project_root / path).resolve()
+                else:
+                    path = path.resolve()
+
                 logger.debug(f"Processing path: {path}")
                 logger.debug(f"Path absolute: {path.absolute()}")
                 logger.debug(f"Path exists: {path.exists()}")
@@ -397,6 +403,18 @@ class CodeCollector:
                     output_file.write(f"```{lang}\n{content}\n```\n\n")
                     logger.debug(f"Processed: {relative_path}")
 
+                # Force flush and sync
+                output_file.flush()
+                os.fsync(output_file.fileno())
+
+            # Force sync to ensure file is visible
+            os.sync()
+
+            # Wait a bit for filesystem to update
+            import time
+
+            time.sleep(0.1)
+
             # Create analysis prompt file with timestamp
             analyze_output_path = self.storage.get_output_path(
                 f"PROMPT_ANALYZE_{timestamp}_{path_str}_{title}.md"
@@ -416,6 +434,33 @@ class CodeCollector:
                 analyze_file.write(prompt_content)
                 analyze_file.write("\n")
                 analyze_file.write(code_content)
+                # Force flush and sync
+                analyze_file.flush()
+                os.fsync(analyze_file.fileno())
+
+            # Force sync to ensure file is visible
+            os.sync()
+
+            # Wait a bit for filesystem to update
+            time.sleep(0.1)
+
+            # Touch files and all parent directories
+            # to trigger VSCode file watcher
+            try:
+                # Touch output files
+                os.utime(code_output_path, None)
+                os.utime(analyze_output_path, None)
+
+                # Touch all parent directories up to project root
+                current = code_output_path.parent
+                while (
+                    current != self.project_root and current != current.parent
+                ):
+                    os.utime(current, None)
+                    current = current.parent
+                os.utime(self.project_root, None)
+            except Exception:
+                pass  # Ignore if touch fails
 
             # Verify files exist and are accessible
             if not code_output_path.exists():
