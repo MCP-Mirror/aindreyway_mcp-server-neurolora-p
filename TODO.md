@@ -11,40 +11,9 @@ This document outlines current issues and improvements needed in the MCP Server 
 
 ## Active Issues
 
-- [ ] Issue 1: Request ID Management
-- [ ] Issue 2: Logging Level Correction
+- [ ] Issue 1: Logging Level Correction
 
-### 1. Request ID Management
-
-**Type**: 🚨 WARNING | 🎯 PRIORITY: Low | ⚡ EFFORT: Small
-
-**Problem**:
-
-- Unsynchronized request_id counter in JsonRpcTerminal
-- Potential race conditions in concurrent scenarios
-
-**Required Changes**:
-
-1. Implement thread-safe counter:
-
-```python
-# Before
-self.request_id += 1
-
-# After
-from itertools import count
-self._counter = count()
-self.request_id = next(self._counter)
-```
-
-2. Document concurrency limitations
-3. Plan for future concurrent architecture
-
-**Files to Check**:
-
-- src/mcp_server_neurolorap/terminal.py
-
-### 2. Logging Level Correction
+### 1. Logging Level Correction
 
 **Type**: 🚨 WARNING | 🎯 PRIORITY: Medium | ⚡ EFFORT: Small
 

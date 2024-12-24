@@ -14,6 +14,7 @@ This document tracks completed tasks and improvements in the MCP Server Neurolor
 - [x] ~~Issue 1: Exception Handling~~ (Completed in fix/exception-handling)
 - [x] ~~Issue 2: Performance Optimization~~ (Completed in fix/performance-optimization)
 - [x] ~~Issue 3: Logging Level Optimization~~ (Completed in fix/logging-levels)
+- [x] ~~Issue 4: Request ID Management~~ (Completed in fix/request-id-management)
 
 ### Exception Handling Improvement
 
@@ -136,3 +137,44 @@ logger.debug(f"Walking directory: {path}")
 
 **Completion Date**: [Current Date]
 **Branch**: fix/logging-levels
+
+### Request ID Management
+
+**Type**: 🚨 WARNING | 🎯 PRIORITY: Low | ⚡ EFFORT: Small
+
+**Problem**:
+
+- Unsynchronized request_id counter in JsonRpcTerminal
+- Potential race conditions in concurrent scenarios
+
+**Implemented Changes**:
+
+1. Implemented thread-safe counter:
+
+```python
+# Before
+self.request_id += 1
+
+# After
+from itertools import count
+self._counter = count()
+request_id = next(self._counter)
+```
+
+2. Added thread safety documentation:
+
+   - Uses itertools.count() for atomic request ID generation
+   - Safe for concurrent command execution
+   - Note: Command handlers themselves may not be thread-safe
+
+3. Documented concurrency limitations:
+   - Command execution is not parallelized
+   - File operations in commands may block
+   - Future versions may add async command execution
+
+**Files Updated**:
+
+- src/mcp_server_neurolorap/terminal.py
+
+**Completion Date**: [Current Date]
+**Branch**: fix/request-id-management
