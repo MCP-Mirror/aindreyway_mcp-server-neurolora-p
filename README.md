@@ -14,6 +14,8 @@ MCP server for collecting code from files and directories into a single markdown
 - Table of contents generation
 - Support for multiple programming languages
 - Developer mode with JSON-RPC terminal interface
+- Robust file system synchronization
+- Comprehensive error handling and logging
 
 ## Quick Overview
 
@@ -134,6 +136,8 @@ This ensures:
 - Consistent file organization
 - Easy access to generated files
 - Support for multiple projects
+- Reliable file synchronization across different OS environments
+- Fast file visibility in IDEs and file explorers
 
 ### Customizing Ignore Patterns
 

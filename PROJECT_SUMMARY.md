@@ -91,8 +91,13 @@ mcp-server-neurolorap/
    - Manages file storage and organization
    - Creates and maintains .neurolora symlink in project root
    - Handles file paths and project structure
-   - Ensures proper file synchronization
+   - Ensures robust file system synchronization:
+     - Uses forced file synchronization (os.fsync)
+     - Implements global file system sync (os.sync)
+     - Updates modification times for directory chain
+     - Includes small delays for filesystem stability
    - Manages .neuroloraignore patterns
+   - Provides comprehensive error handling and logging
 
 5. **Configuration**
    - .neuroloraignore support
@@ -180,7 +185,8 @@ Goodbye!
 - [x] Add developer mode with JSON-RPC terminal
 - [x] Implement proper file storage structure
 - [x] Add support for multiple projects
-- [x] Ensure file system synchronization
+- [x] Implement robust file system synchronization
+- [x] Add comprehensive error handling and logging
 - [ ] Add support for binary files
 - [ ] Implement file size limits configuration
 - [ ] Add output format customization
