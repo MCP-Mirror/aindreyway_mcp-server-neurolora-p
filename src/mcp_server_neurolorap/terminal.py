@@ -5,16 +5,31 @@ using JSON-RPC protocol in developer mode. It allows executing commands and
 viewing their output directly in the terminal.
 """
 
+from itertools import count
 from typing import Any, Dict, List, Optional
 
 from mcp_server_neurolorap.collector import CodeCollector
 
 
 class JsonRpcTerminal:
-    """Terminal interface for JSON-RPC commands."""
+    """Terminal interface for JSON-RPC commands.
+
+    This class provides a thread-safe implementation of JSON-RPC request
+    handling for the developer mode terminal interface.
+
+    Thread Safety:
+        - Uses itertools.count() for atomic request ID generation
+        - Safe for concurrent command execution
+        - Note: Command handlers themselves may not be thread-safe
+
+    Concurrency Limitations:
+        - Command execution is not parallelized
+        - File operations in commands may block
+        - Future versions may add async command execution
+    """
 
     def __init__(self) -> None:
-        self.request_id = 0
+        self._counter = count()
         self.collector = CodeCollector()
         # Dictionary to store available commands and their handlers
         self.commands: Dict[str, Any] = (
@@ -45,11 +60,12 @@ class JsonRpcTerminal:
             command = parts[0]
             params = parts[1:] if len(parts) > 1 else []
 
+            request_id = next(self._counter)
             return {
                 "jsonrpc": "2.0",
                 "method": command,
                 "params": params,
-                "id": self.request_id,
+                "id": request_id,
             }
         except Exception:
             return None
@@ -66,14 +82,13 @@ class JsonRpcTerminal:
         Returns:
             Dict[str, Any]: Formatted JSON-RPC response
         """
-        response: Dict[str, Any] = {"jsonrpc": "2.0", "id": self.request_id}
+        request_id = next(self._counter)
+        response: Dict[str, Any] = {"jsonrpc": "2.0", "id": request_id}
 
         if error:
             response["error"] = error
         else:
             response["result"] = result
-
-        self.request_id += 1
         return response
 
     async def handle_command(self, request: Dict[str, Any]) -> Dict[str, Any]:
