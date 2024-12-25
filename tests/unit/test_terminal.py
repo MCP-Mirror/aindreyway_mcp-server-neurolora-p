@@ -2,9 +2,9 @@
 
 from pathlib import Path
 from typing import Any, Dict
+from unittest.mock import MagicMock
 
 import pytest
-from unittest.mock import MagicMock
 
 from mcp_server_neurolorap.terminal import JsonRpcTerminal
 

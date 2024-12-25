@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 T = TypeVar("T", bound=Callable[..., Any])
 ToolCallable = Callable[..., Coroutine[Any, Any, str]]
 

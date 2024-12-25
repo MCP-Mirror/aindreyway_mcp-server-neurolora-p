@@ -470,9 +470,12 @@ class CodeCollector:
                 ):
                     os.utime(current, None)
                     current = current.parent
+
                 os.utime(self.project_root, None)
-            except Exception:
-                pass  # Ignore if touch fails
+            except Exception as e:
+                logger.debug(
+                    f"Failed to touch project root: {str(e)}"
+                )  # nosec B110 - Intentionally catching all exceptions for filesystem operations
 
             # Verify files exist and are accessible
             if not code_output_path.exists():

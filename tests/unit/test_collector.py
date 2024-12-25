@@ -4,9 +4,9 @@ import logging
 import os
 from pathlib import Path
 from typing import Any
+from unittest.mock import create_autospec, patch
 
 import pytest
-from unittest.mock import create_autospec, patch
 
 from mcp_server_neurolorap.collector import CodeCollector, LanguageMap
 
