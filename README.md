@@ -6,6 +6,8 @@
 
 MCP server for collecting code from files and directories into a single markdown document.
 
+<a href="https://glama.ai/mcp/servers/rg07wseeqe"><img width="380" height="200" src="https://glama.ai/mcp/servers/rg07wseeqe/badge" alt="Server Neurolorap MCP server" /></a>
+
 ## Features
 
 - Collect code from entire project
