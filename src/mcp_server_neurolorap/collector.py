@@ -475,7 +475,9 @@ class CodeCollector:
             except Exception as e:
                 logger.debug(
                     f"Failed to touch project root: {str(e)}"
-                )  # nosec B110 - Intentionally catching all exceptions for filesystem operations
+                )  # nosec B110
+                # Intentionally catching all exceptions for
+                # filesystem operations
 
             # Verify files exist and are accessible
             if not code_output_path.exists():
