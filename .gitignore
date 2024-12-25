@@ -44,3 +44,8 @@ FULL_CODE_*.md
 PROMPT_ANALYZE_*.md
 LAST_RESPONSE_*.txt
 LAST_RESPONSE_*.json
+
+# Local storage
+.neurolora/
+.neurolora
+.neuroloraignore
