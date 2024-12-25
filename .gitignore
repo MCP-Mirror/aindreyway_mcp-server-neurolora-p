@@ -1,8 +1,8 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 build/
 develop-eggs/
@@ -19,7 +19,25 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.DS_Store
+
+# Coverage
+.coverage
+coverage.xml
+coverage_html/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
 
 # Generated files
 FULL_CODE_*.md

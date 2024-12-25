@@ -67,30 +67,43 @@ class ClinesConfig(TypedDict):
     mcpServers: Dict[str, ServerConfig]
 
 
-def configure_cline() -> None:
+def get_config_path() -> Path:
+    """Get the path to the Cline configuration file.
+
+    Returns:
+        Path: The path to the configuration file
+    """
+    home = Path.home()
+    return (
+        home
+        / "Library"
+        / "Application Support"
+        / "Code"
+        / "User"
+        / "globalStorage"
+        / "saoudrizwan.claude-dev"
+        / "settings"
+        / "cline_mcp_settings.json"
+    )
+
+
+def configure_cline(config_path: Path | None = None) -> None:
     """Configure integration with Cline.
 
     Automatically sets up the MCP server configuration in Cline's settings.
     Handles installation, updates, and environment configuration.
+
+    Args:
+        config_path: Optional path to the configuration file (for testing)
     """
     try:
         # Get Cline config path
-        home = Path.home()
-        config_path = (
-            home
-            / "Library"
-            / "Application Support"
-            / "Code"
-            / "User"
-            / "globalStorage"
-            / "saoudrizwan.claude-dev"
-            / "settings"
-            / "cline_mcp_settings.json"
-        )
+        if config_path is None:
+            config_path = get_config_path()
 
         config: ClinesConfig
         if config_path.exists():
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 raw_config = json.load(f)
                 if "mcpServers" not in raw_config:
                     raw_config["mcpServers"] = {}
@@ -118,14 +131,14 @@ def configure_cline() -> None:
 
         if server_name not in config["mcpServers"]:
             config["mcpServers"][server_name] = server_config
-            with open(config_path, "w") as f:
+            with open(config_path, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2)
             logger.info("Added server configuration to Cline")
         else:
             current_config = config["mcpServers"][server_name]
             if current_config != server_config:
                 config["mcpServers"][server_name] = server_config
-                with open(config_path, "w") as f:
+                with open(config_path, "w", encoding="utf-8") as f:
                     json.dump(config, f, indent=2)
                 logger.info("Updated server configuration in Cline")
             else:
@@ -152,6 +165,8 @@ def main() -> None:
 
         # Create and run server
         server = create_server()
+        if server.run is None:
+            raise RuntimeError("Server run method is not initialized")
         server.run()
 
     except Exception as e:

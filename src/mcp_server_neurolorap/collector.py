@@ -185,8 +185,20 @@ class CodeCollector:
         if "FULL_CODE_" in str(file_path):
             logger.debug(f"Ignoring {str_path} (generated file)")
             return True
-        if file_path.stat().st_size > 1024 * 1024:  # Skip files > 1MB
-            logger.debug(f"Ignoring {str_path} (too large)")
+
+        # Always ignore .neuroloraignore files
+        if file_path.name == ".neuroloraignore":
+            logger.debug(f"Ignoring {str_path} (ignore file)")
+            return True
+
+        try:
+            if (
+                file_path.exists() and file_path.stat().st_size > 1024 * 1024
+            ):  # Skip files > 1MB
+                logger.debug(f"Ignoring {str_path} (too large)")
+                return True
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error(f"Error checking file size for {str_path}: {str(e)}")
             return True
 
         logger.debug(f"Including {str_path}")

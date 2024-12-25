@@ -9,8 +9,8 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
+    runtime_checkable,
 )
-
 from mcp.types import TextContent, Tool
 
 T = TypeVar("T")
@@ -19,6 +19,16 @@ ListToolsHandler = Callable[[], Coroutine[Any, Any, List[Tool]]]
 CallToolHandler = Callable[
     [str, Union[Dict[str, Any], None]], Coroutine[Any, Any, List[TextContent]]
 ]
+
+
+@runtime_checkable
+class FastMCPType(Protocol):
+    """Protocol for FastMCP instance with dynamic attributes."""
+
+    tool: Callable[[], Callable[[Callable[..., Any]], Callable[..., Any]]]
+    __call__: Callable[..., Any]
+    run: Callable[[], None] | None
+    registered_tools: Dict[str, Callable[..., Coroutine[Any, Any, str]]]
 
 
 class ServerProtocol(Protocol):

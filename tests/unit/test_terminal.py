@@ -1,10 +1,17 @@
 """Unit tests for the JsonRpcTerminal class."""
 
 from pathlib import Path
+from typing import Any, Dict
+
 import pytest
 from unittest.mock import MagicMock
 
 from mcp_server_neurolorap.terminal import JsonRpcTerminal
+
+# Type aliases for JSON-RPC structures
+JsonRpcRequest = Dict[str, Any]
+JsonRpcResponse = Dict[str, Any]
+JsonRpcError = Dict[str, Any]
 
 
 @pytest.fixture
@@ -70,6 +77,10 @@ def test_parse_request_valid(
         "",  # Empty line
         "   ",  # Whitespace only
         "\n",  # Newline only
+        None,  # None value
+        "invalid\x00command",  # Invalid characters
+        "command\nwith\nnewlines",  # Multiple lines
+        "   spaces   everywhere   ",  # Extra spaces
     ],
 )
 def test_parse_request_invalid(
@@ -91,7 +102,7 @@ def test_format_response_success(terminal: JsonRpcTerminal) -> None:
 
 def test_format_response_error(terminal: JsonRpcTerminal) -> None:
     """Test formatting error responses."""
-    error = {"code": -32000, "message": "Test error"}
+    error: JsonRpcError = {"code": -32000, "message": "Test error"}
     response = terminal.format_response(None, error)
     assert response["jsonrpc"] == "2.0"
     assert response["error"] == error
@@ -102,7 +113,7 @@ def test_format_response_error(terminal: JsonRpcTerminal) -> None:
 @pytest.mark.asyncio
 async def test_handle_command_unknown(terminal: JsonRpcTerminal) -> None:
     """Test handling unknown commands."""
-    request = {"jsonrpc": "2.0", "method": "unknown", "id": 1}
+    request: JsonRpcRequest = {"jsonrpc": "2.0", "method": "unknown", "id": 1}
     response = await terminal.handle_command(request)
     assert "error" in response
     assert response["error"]["code"] == -32601
@@ -116,7 +127,7 @@ async def test_handle_command_error(terminal: JsonRpcTerminal) -> None:
         side_effect=ValueError("Test error")
     )
 
-    request = {"jsonrpc": "2.0", "method": "collect", "id": 1}
+    request: JsonRpcRequest = {"jsonrpc": "2.0", "method": "collect", "id": 1}
     response = await terminal.handle_command(request)
     assert "error" in response
     assert "Test error" in response["error"]["message"]
@@ -149,6 +160,66 @@ async def test_cmd_collect_no_params(terminal: JsonRpcTerminal) -> None:
         await terminal.cmd_collect([])
 
 
+@pytest.mark.parametrize(
+    "result_value,expected_type",
+    [
+        ("string result", str),
+        (123, int),
+        ({"key": "value"}, dict),
+        ([1, 2, 3], list),
+        (None, type(None)),
+        (True, bool),
+    ],
+)
+def test_format_response_different_types(
+    terminal: JsonRpcTerminal, result_value: Any, expected_type: type
+) -> None:
+    """Test formatting responses with different result types."""
+    response = terminal.format_response(result_value)
+    assert response["jsonrpc"] == "2.0"
+    assert isinstance(response["result"], expected_type)
+    assert response["result"] == result_value
+    assert "error" not in response
+
+
+@pytest.mark.parametrize(
+    "error_code,error_message",
+    [
+        (-32700, "Parse error"),
+        (-32600, "Invalid Request"),
+        (-32601, "Method not found"),
+        (-32602, "Invalid params"),
+        (-32603, "Internal error"),
+        (-32000, "Server error"),
+    ],
+)
+def test_format_response_different_errors(
+    terminal: JsonRpcTerminal, error_code: int, error_message: str
+) -> None:
+    """Test formatting responses with different error types."""
+    error: JsonRpcError = {"code": error_code, "message": error_message}
+    response = terminal.format_response(None, error)
+    assert response["jsonrpc"] == "2.0"
+    assert response["error"] == error
+    assert "result" not in response
+
+
+@pytest.mark.asyncio
+async def test_handle_command_invalid_params(
+    terminal: JsonRpcTerminal,
+) -> None:
+    """Test handling commands with invalid parameters."""
+    request: JsonRpcRequest = {
+        "jsonrpc": "2.0",
+        "method": "collect",
+        "params": "invalid params type",  # Should be a list
+        "id": 1,
+    }
+    response = await terminal.handle_command(request)
+    assert "error" in response
+    assert response["error"]["code"] == -32000
+
+
 @pytest.mark.asyncio
 async def test_cmd_collect_success(
     terminal_with_root: JsonRpcTerminal, project_root: Path
@@ -166,6 +237,43 @@ async def test_cmd_collect_success(
     finally:
         # Cleanup
         test_file.unlink()
+
+
+@pytest.mark.parametrize(
+    "path_input",
+    [
+        "src/",  # Directory path
+        "./src",  # Relative path
+        "'quoted/path'",  # Quoted path
+        '"double/quoted/path"',  # Double quoted path
+        "path with spaces",  # Path with spaces
+        "multiple/path/segments",  # Multiple segments
+    ],
+)
+@pytest.mark.asyncio
+async def test_cmd_collect_path_formats(
+    terminal_with_root: JsonRpcTerminal, project_root: Path, path_input: str
+) -> None:
+    """Test code collection with different path formats."""
+    # Create test file
+    test_dir = project_root / "test_dir"
+    test_dir.mkdir(exist_ok=True)
+    test_file = test_dir / "test.py"
+    test_file.write_text("print('test')")
+
+    try:
+        # Replace path segments in input with actual test directory
+        actual_path = str(test_dir)
+        if path_input.startswith(("'", '"')):
+            actual_path = f"{path_input[0]}{test_dir}{path_input[0]}"
+
+        result = await terminal_with_root.cmd_collect([actual_path])
+        assert isinstance(result, dict)
+        assert "Code collection complete!" in result["result"]
+    finally:
+        # Cleanup
+        test_file.unlink()
+        test_dir.rmdir()
 
 
 @pytest.mark.asyncio
@@ -187,6 +295,18 @@ async def test_cmd_collect_with_subproject(
     finally:
         # Cleanup
         test_file.unlink()
+
+
+@pytest.mark.asyncio
+async def test_cmd_collect_invalid_collector_creation(
+    terminal: JsonRpcTerminal,
+) -> None:
+    """Test error handling when CodeCollector creation fails."""
+    # Create a terminal with an invalid project root
+    invalid_terminal = JsonRpcTerminal(project_root="/nonexistent/path")
+
+    with pytest.raises(ValueError):
+        await invalid_terminal.cmd_collect(["some/path"])
 
 
 @pytest.mark.asyncio

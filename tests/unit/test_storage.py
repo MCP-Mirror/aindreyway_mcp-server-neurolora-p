@@ -19,20 +19,23 @@ def subproject_storage(project_root: Path) -> StorageManager:
     return StorageManager(project_root, subproject_id="test-sub")
 
 
-def test_init_basic(storage_manager: StorageManager, project_root: Path):
+def test_init_basic(
+    storage_manager: StorageManager, project_root: Path
+) -> None:
     """Test basic initialization of StorageManager."""
     assert storage_manager.project_root == project_root
     assert storage_manager.project_name == project_root.name
     assert storage_manager.mcp_docs_dir == Path.home() / ".mcp-docs"
-    assert storage_manager.project_docs_dir == (
-        storage_manager.mcp_docs_dir / project_root.name
+    assert (
+        storage_manager.project_docs_dir
+        == storage_manager.mcp_docs_dir / project_root.name
     )
     assert storage_manager.neurolora_link == project_root / ".neurolora"
 
 
 def test_init_with_subproject(
     subproject_storage: StorageManager, project_root: Path
-):
+) -> None:
     """Test initialization with subproject ID."""
     expected_name = f"{project_root.name}-test-sub"
     assert subproject_storage.project_name == expected_name
@@ -41,7 +44,7 @@ def test_init_with_subproject(
     )
 
 
-def test_setup_creates_directories(storage_manager: StorageManager):
+def test_setup_creates_directories(storage_manager: StorageManager) -> None:
     """Test that setup creates all required directories."""
     storage_manager.setup()
 
@@ -53,7 +56,7 @@ def test_setup_creates_directories(storage_manager: StorageManager):
     assert (storage_manager.project_docs_dir / ".initialized").exists()
 
 
-def test_setup_creates_symlink(storage_manager: StorageManager):
+def test_setup_creates_symlink(storage_manager: StorageManager) -> None:
     """Test that setup creates the .neurolora symlink correctly."""
     storage_manager.setup()
 
@@ -66,7 +69,7 @@ def test_setup_creates_symlink(storage_manager: StorageManager):
     )
 
 
-def test_setup_creates_task_files(storage_manager: StorageManager):
+def test_setup_creates_task_files(storage_manager: StorageManager) -> None:
     """Test that setup creates TODO.md and DONE.md files."""
     storage_manager.setup()
 
@@ -75,7 +78,7 @@ def test_setup_creates_task_files(storage_manager: StorageManager):
     assert (storage_manager.project_docs_dir / "DONE.md").exists()
 
 
-def test_setup_creates_ignore_file(storage_manager: StorageManager):
+def test_setup_creates_ignore_file(storage_manager: StorageManager) -> None:
     """Test that setup creates .neuroloraignore file."""
     storage_manager.setup()
 
@@ -83,14 +86,16 @@ def test_setup_creates_ignore_file(storage_manager: StorageManager):
     assert (storage_manager.project_root / ".neuroloraignore").exists()
 
 
-def test_get_output_path(storage_manager: StorageManager):
+def test_get_output_path(storage_manager: StorageManager) -> None:
     """Test getting output file path."""
     filename = "test.md"
     expected_path = storage_manager.project_docs_dir / filename
     assert storage_manager.get_output_path(filename) == expected_path
 
 
-def test_symlink_update(storage_manager: StorageManager, project_root: Path):
+def test_symlink_update(
+    storage_manager: StorageManager, project_root: Path
+) -> None:
     """Test updating existing symlink."""
     # Create initial setup
     storage_manager.setup()
@@ -111,7 +116,9 @@ def test_symlink_update(storage_manager: StorageManager, project_root: Path):
     new_target.rmdir()
 
 
-def test_error_handling_invalid_symlink(storage_manager: StorageManager):
+def test_error_handling_invalid_symlink(
+    storage_manager: StorageManager,
+) -> None:
     """Test handling invalid symlink scenarios."""
     # Create a file instead of symlink
     storage_manager.neurolora_link.touch()
@@ -126,7 +133,9 @@ def test_error_handling_invalid_symlink(storage_manager: StorageManager):
     )
 
 
-def test_error_handling_permission_denied(storage_manager: StorageManager):
+def test_error_handling_permission_denied(
+    storage_manager: StorageManager,
+) -> None:
     """Test handling permission denied errors."""
     if os.name != "nt":  # Skip on Windows
         # Make project directory read-only
@@ -144,8 +153,8 @@ def test_error_handling_permission_denied(storage_manager: StorageManager):
 
 
 def test_template_file_missing_template(
-    storage_manager: StorageManager, caplog
-):
+    storage_manager: StorageManager, caplog: pytest.LogCaptureFixture
+) -> None:
     """Test handling missing template files."""
     storage_manager.setup()
 
@@ -154,7 +163,7 @@ def test_template_file_missing_template(
     assert "Template file not found" in caplog.text
 
 
-def test_cleanup_between_tests(storage_manager: StorageManager):
+def test_cleanup_between_tests(storage_manager: StorageManager) -> None:
     """Test cleanup between tests."""
     storage_manager.setup()
 
@@ -171,7 +180,7 @@ def test_cleanup_between_tests(storage_manager: StorageManager):
 @pytest.mark.parametrize(
     "subproject_id", ["test-sub", "feature-123", "debug-mode"]
 )
-def test_multiple_subprojects(project_root: Path, subproject_id: str):
+def test_multiple_subprojects(project_root: Path, subproject_id: str) -> None:
     """Test handling multiple subprojects."""
     storage = StorageManager(project_root, subproject_id=subproject_id)
     storage.setup()
@@ -188,7 +197,7 @@ def test_multiple_subprojects(project_root: Path, subproject_id: str):
         storage.neurolora_link.unlink()
 
 
-def test_concurrent_access(project_root: Path):
+def test_concurrent_access(project_root: Path) -> None:
     """Test handling concurrent access to storage."""
     # Create multiple storage managers for same project
     storage1 = StorageManager(project_root)

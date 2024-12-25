@@ -2,24 +2,27 @@
 
 import logging
 from pathlib import Path
+from typing import Any
+
 import pytest
+
 from mcp_server_neurolorap.collector import CodeCollector, LanguageMap
 
 
-def test_init_with_project_root(project_root: Path):
+def test_init_with_project_root(project_root: Path) -> None:
     """Test initializing CodeCollector with project root."""
     collector = CodeCollector(project_root)
     assert collector.project_root == project_root
     assert isinstance(collector.ignore_patterns, list)
 
 
-def test_init_without_project_root():
+def test_init_without_project_root() -> None:
     """Test initializing CodeCollector without project root."""
     collector = CodeCollector()
     assert collector.project_root == Path.cwd()
 
 
-def test_load_ignore_patterns(project_root: Path, ignore_file: Path):
+def test_load_ignore_patterns(project_root: Path, ignore_file: Path) -> None:
     """Test loading ignore patterns from .neuroloraignore file."""
     collector = CodeCollector(project_root)
     patterns = collector.load_ignore_patterns()
@@ -29,7 +32,7 @@ def test_load_ignore_patterns(project_root: Path, ignore_file: Path):
     assert ".git/" in patterns
 
 
-def test_should_ignore_file(project_root: Path, ignore_file: Path):
+def test_should_ignore_file(project_root: Path, ignore_file: Path) -> None:
     """Test file ignore logic."""
     collector = CodeCollector(project_root)
 
@@ -48,7 +51,7 @@ def test_should_ignore_file(project_root: Path, ignore_file: Path):
     assert not collector.should_ignore_file(project_root / "src" / "main.py")
 
 
-def test_collect_files(project_root: Path, sample_files: list[Path]):
+def test_collect_files(project_root: Path, sample_files: list[Path]) -> None:
     """Test collecting files from input paths."""
     collector = CodeCollector(project_root)
 
@@ -70,14 +73,16 @@ def test_collect_files(project_root: Path, sample_files: list[Path]):
     assert project_root / "src" / "main.py" in files
 
 
-def test_collect_files_nonexistent(project_root: Path):
+def test_collect_files_nonexistent(project_root: Path) -> None:
     """Test collecting files from nonexistent paths."""
     collector = CodeCollector(project_root)
     files = collector.collect_files("nonexistent")
     assert files == []
 
 
-def test_read_file_content(project_root: Path, sample_files: list[Path]):
+def test_read_file_content(
+    project_root: Path, sample_files: list[Path]
+) -> None:
     """Test reading file content."""
     collector = CodeCollector(project_root)
 
@@ -90,7 +95,7 @@ def test_read_file_content(project_root: Path, sample_files: list[Path]):
     assert content == "[File not found]"
 
 
-def test_make_anchor():
+def test_make_anchor() -> None:
     """Test markdown anchor generation."""
     collector = CodeCollector()
 
@@ -106,11 +111,13 @@ def test_make_anchor():
 
 
 @pytest.mark.parametrize(
-    "title", ["Test Collection", "Project Files", "Source Code"]
-)
+    "title",
+    ["Test Collection", "Project Files", "Source Code"],
+    ids=["collection", "files", "source"],
+)  # type: ignore[misc]
 def test_collect_code(
     project_root: Path, sample_files: list[Path], title: str
-):
+) -> None:
     """Test full code collection process."""
     collector = CodeCollector(project_root)
 
@@ -141,33 +148,54 @@ def test_collect_code(
         assert f"Test content in {file.name}" in content
 
 
-def test_collect_code_empty_input(project_root: Path):
+def test_collect_code_empty_input(project_root: Path) -> None:
     """Test code collection with empty input."""
     collector = CodeCollector(project_root)
     assert collector.collect_code("nonexistent") is None
 
 
-def test_collect_code_error_handling(project_root: Path, caplog):
+@pytest.mark.parametrize(
+    "error_type,error_msg,expected_log",
+    [
+        (ValueError, "Invalid input", "Invalid input"),
+        (FileNotFoundError, "File not found", "File not found"),
+        (PermissionError, "Permission denied", "Permission denied"),
+        (Exception, "Unexpected error", "Unexpected error"),
+    ],
+    ids=[
+        "value_error",
+        "file_not_found",
+        "permission_error",
+        "unexpected_error",
+    ],
+)
+def test_collect_code_error_handling(
+    project_root: Path,
+    caplog: pytest.LogCaptureFixture,
+    error_type: type[Exception],
+    error_msg: str,
+    expected_log: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Test error handling during code collection."""
     collector = CodeCollector(project_root)
 
+    def mock_collect_files(*args: Any, **kwargs: Any) -> list[Path]:
+        raise error_type(error_msg)
+
+    monkeypatch.setattr(collector, "collect_files", mock_collect_files)
+
     with caplog.at_level(logging.ERROR):
-        # Test with invalid input
-        assert collector.collect_code(None) is None  # type: ignore
-        assert "Unexpected error" in caplog.text
+        result = collector.collect_code("test_input")
+        assert result is None
+        assert expected_log in caplog.text
 
-        # Test with permission error
-        test_file = project_root / "test.py"
-        test_file.touch(mode=0o000)  # Make file unreadable
-        assert collector.collect_code(str(test_file)) is None
-        assert "Permission denied" in caplog.text
-
-        # Cleanup
-        test_file.chmod(0o666)
-        test_file.unlink()
+        # Verify no output file was created
+        output_files = list(project_root.glob("FULL_CODE_*"))
+        assert len(output_files) == 0
 
 
-def test_large_file_handling(project_root: Path):
+def test_large_file_handling(project_root: Path) -> None:
     """Test handling of large files."""
     collector = CodeCollector(project_root)
 
@@ -181,7 +209,7 @@ def test_large_file_handling(project_root: Path):
     large_file.unlink()
 
 
-def test_binary_file_handling(project_root: Path):
+def test_binary_file_handling(project_root: Path) -> None:
     """Test handling of binary files."""
     collector = CodeCollector(project_root)
 

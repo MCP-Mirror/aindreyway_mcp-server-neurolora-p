@@ -7,7 +7,7 @@ viewing their output directly in the terminal.
 
 from itertools import count
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, cast
 
 from mcp_server_neurolorap.collector import CodeCollector
 
@@ -29,21 +29,36 @@ class JsonRpcTerminal:
         - Future versions may add async command execution
     """
 
-    def __init__(self, project_root: str | None = None) -> None:
-        self._counter = count()
-        self.project_root = Path(project_root) if project_root else None
-        self.collector = CodeCollector(project_root=self.project_root)
-        # Dictionary to store available commands and their handlers
-        self.commands: Dict[str, Any] = (
-            {  # Any used because of different return types
-                "help": self.cmd_help,
-                "list_tools": self.cmd_list_tools,
-                "collect": self.cmd_collect,
-                "exit": self.cmd_exit,
-            }
-        )
+    collector: CodeCollector | None
+    project_root: Path | None
+    commands: Dict[str, Any]
+    _counter: Iterator[int]
 
-    def parse_request(self, line: str) -> Optional[Dict[str, Any]]:
+    def __init__(self, project_root: str | None = None) -> None:
+        """Initialize the terminal interface.
+
+        Args:
+            project_root: Optional root directory for code collection
+        """
+        self._counter = cast(Iterator[int], count())
+        self.project_root = Path(project_root) if project_root else None
+        try:
+            self.collector = CodeCollector(project_root=self.project_root)
+        except Exception:
+            # Log error but don't fail initialization
+            # Commands that need collector will fail when called
+            self.collector = None
+            self.project_root = None
+
+        # Dictionary to store available commands and their handlers
+        self.commands: Dict[str, Any] = {
+            "help": self.cmd_help,
+            "list_tools": self.cmd_list_tools,
+            "collect": self.cmd_collect,
+            "exit": self.cmd_exit,
+        }
+
+    def parse_request(self, line: str | None) -> Optional[Dict[str, Any]]:
         """Parse a line of input into a JSON-RPC request.
 
         Args:
@@ -52,14 +67,39 @@ class JsonRpcTerminal:
         Returns:
             Optional[Dict[str, Any]]: Parsed JSON-RPC request or None if
             invalid
+
+        Validation rules:
+            - Line must not be None or empty
+            - Line must not contain null bytes or control characters
+            - Command must be a single word
+            - Parameters are space-separated
         """
+        if not line:
+            return None
+
         try:
-            # Simple command parsing for now
-            parts = line.strip().split()
+            # Check for invalid characters
+            if "\0" in line or "\n" in line or "\r" in line:
+                return None
+
+            # Check for multiple spaces
+            if "  " in line:
+                return None
+
+            # Split into parts and filter out empty/whitespace
+            parts = [p for p in line.split() if p.strip()]
             if not parts:
                 return None
 
+            # Validate command (first part)
             command = parts[0]
+            if (
+                not command.isalnum()
+                and not command.replace("_", "").isalnum()
+            ):
+                return None
+
+            # Get params (remaining parts)
             params = parts[1:] if len(parts) > 1 else []
 
             request_id = next(self._counter)
@@ -146,6 +186,9 @@ class JsonRpcTerminal:
         if not params:
             raise ValueError("Path parameter required")
 
+        if not self.collector:
+            raise ValueError("Code collector not initialized")
+
         # Remove quotes if present
         path = params[0].strip("\"'")
 
@@ -154,13 +197,8 @@ class JsonRpcTerminal:
         if len(params) > 1:
             subproject_id = params[1].strip("\"'")
 
-        # Create collector with project_root and subproject_id
-        collector = CodeCollector(
-            project_root=self.project_root if self.project_root else None,
-            subproject_id=subproject_id,
-        )
-
-        output_file = collector.collect_code(path, "Code Collection")
+        # Use existing collector for collecting code
+        output_file = self.collector.collect_code(path, "Code Collection")
         if not output_file:
             raise ValueError("Failed to collect code or no files found")
 
