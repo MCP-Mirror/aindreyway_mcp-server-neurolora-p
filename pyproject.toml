@@ -141,3 +141,9 @@ show_missing = true
 
 [tool.coverage.html]
 directory = "coverage_html"
+
+[tool.pylance]
+reportUnknownMemberType = "none"
+reportUnknownVariableType = "none"
+reportUnknownArgumentType = "none"
+reportUnusedFunction = "none"

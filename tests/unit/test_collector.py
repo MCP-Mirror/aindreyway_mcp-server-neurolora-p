@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from unittest.mock import create_autospec, patch
 
 from mcp_server_neurolorap.collector import CodeCollector, LanguageMap
 
@@ -265,10 +266,19 @@ def test_make_anchor() -> None:
     ids=["collection", "files", "source"],
 )
 def test_collect_code(
-    project_root: Path, sample_files: list[Path], title: str
+    project_root: Path,
+    sample_files: list[Path],
+    title: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test full code collection process."""
     collector = CodeCollector(project_root)
+
+    # Mock os.sync and os.utime
+    sync_mock = create_autospec(os.sync, return_value=None)
+    utime_mock = create_autospec(os.utime, return_value=None)
+    monkeypatch.setattr(os, "sync", sync_mock)
+    monkeypatch.setattr(os, "utime", utime_mock)
 
     # Test collecting all files
     output_path = collector.collect_code(str(project_root), title=title)
@@ -424,12 +434,15 @@ def test_collect_files_error_handling(project_root: Path) -> None:
     no_access_dir.mkdir()
     no_access_file = no_access_dir / "test.py"
     no_access_file.write_text("Test content")
-    os.chmod(no_access_dir, 0o000)
 
-    files = collector.collect_files(str(no_access_dir))
-    assert files == []
+    with patch(
+        "pathlib.Path.stat", create_autospec(Path.stat, return_value=None)
+    ):
+        os.chmod(no_access_dir, 0o000)
+        files = collector.collect_files(str(no_access_dir))
+        assert files == []
+        os.chmod(no_access_dir, 0o777)
 
-    os.chmod(no_access_dir, 0o777)
     no_access_file.unlink()
     no_access_dir.rmdir()
 

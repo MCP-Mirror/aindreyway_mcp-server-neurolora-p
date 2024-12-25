@@ -11,6 +11,7 @@ from typing import (
     Union,
     runtime_checkable,
 )
+
 from mcp.types import TextContent, Tool
 
 T = TypeVar("T")
@@ -20,15 +21,23 @@ CallToolHandler = Callable[
     [str, Union[Dict[str, Any], None]], Coroutine[Any, Any, List[TextContent]]
 ]
 
+# Type for async functions that can be used as tools
+ToolFunction = Callable[..., Coroutine[Any, Any, str]]
+
 
 @runtime_checkable
 class FastMCPType(Protocol):
     """Protocol for FastMCP instance with dynamic attributes."""
 
-    tool: Callable[[], Callable[[Callable[..., Any]], Callable[..., Any]]]
-    __call__: Callable[..., Any]
+    name: str
+    # The tool decorator type is complex due to its dual nature:
+    # 1. It can be called directly with a function: @tool
+    # 2. It can be called with config args: @tool(name="x", description="y")
+    # This makes static typing challenging, so we use Any
+    tool: Any
     run: Callable[[], None] | None
-    registered_tools: Dict[str, Callable[..., Coroutine[Any, Any, str]]]
+    tool_called: bool
+    tools: Dict[str, ToolFunction]
 
 
 class ServerProtocol(Protocol):

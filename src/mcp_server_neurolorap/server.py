@@ -3,7 +3,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 from mcp.server.fastmcp import FastMCP
 
@@ -31,9 +31,9 @@ def get_project_root() -> Path:
 
 def create_server() -> FastMCPType:
     """Create and configure a new server instance."""
-    mcp = FastMCP("neurolorap", tools=True)
+    mcp = FastMCP("neurolorap")
 
-    @mcp.tool()  # type: ignore[misc]
+    # Function is used through MCP tool registration, not directly
     async def code_collector(
         input_path: str | list[str],
         title: str = "Code Collection",
@@ -66,22 +66,16 @@ def create_server() -> FastMCPType:
 
             return f"Code collection complete!\nOutput file: {output_file}"
 
-        except (FileNotFoundError, PermissionError, OSError) as e:
-            error_msg = f"File system error collecting code: {e}"
-            logger.warning(error_msg)
-            return error_msg
-        except ValueError as e:
-            error_msg = f"Invalid input: {e}"
-            logger.warning(error_msg)
-            return error_msg
-        except TypeError as e:
-            error_msg = f"Type error: {e}"
-            logger.warning(error_msg)
-            return error_msg
         except Exception as e:
             error_msg = f"Unexpected error collecting code: {e}"
             logger.error(error_msg, exc_info=True)
-            return "An unexpected error occurred. Check server logs."
+            return "No files found to process or error occurred"
+
+    # Register the tool with MCP
+    mcp.tool(
+        name="code_collector",
+        description="Collect code from files into a markdown document",
+    )(code_collector)
 
     return cast(FastMCPType, mcp)
 
@@ -102,7 +96,7 @@ async def run_dev_mode() -> None:
             if not line:
                 continue
 
-            request: Optional[dict[str, Any]] = terminal.parse_request(line)
+            request: dict[str, Any] | None = terminal.parse_request(line)
             if not request:
                 print("Invalid command format")
                 continue
@@ -111,7 +105,12 @@ async def run_dev_mode() -> None:
 
             if "error" in response and response["error"] is not None:
                 error = response["error"]
-                if isinstance(error, dict) and "message" in error:
+                if (
+                    isinstance(error, dict)
+                    and "message" in error
+                    and error["message"] is not None
+                    and str(error["message"]).strip()
+                ):
                     print(f"Error: {error['message']}")
             elif "result" in response:
                 print(response["result"])
