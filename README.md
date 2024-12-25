@@ -198,48 +198,14 @@ python -m mcp_server_neurolorap --dev
 
 ### Testing
 
-The project uses pytest for testing and includes comprehensive test coverage:
+The project maintains high quality standards through automated testing and continuous integration:
 
-```sh
-# Run all tests
-pytest
+- Comprehensive test suite with over 80% code coverage
+- Automated testing on Python 3.10, 3.11, and 3.12
+- Continuous integration through GitHub Actions
+- Regular security scans and dependency checks
 
-# Run with coverage report
-pytest --cov=mcp_server_neurolorap
-
-# Run specific test categories
-pytest -m unit          # Unit tests only
-pytest -m integration   # Integration tests only
-pytest -m "not slow"    # Skip slow tests
-
-# Run tests in parallel
-pytest -n auto
-
-# Run with test timing
-pytest --durations=10
-
-# Generate HTML coverage report
-pytest --cov=mcp_server_neurolorap --cov-report=html
-```
-
-Test categories:
-
-- **Unit Tests**: Test individual components in isolation
-- **Integration Tests**: Test component interactions
-- **Performance Tests**: Test system performance under load
-- **Security Tests**: Test security measures and vulnerabilities
-
-Test files are organized by component:
-
-```
-tests/
-├── unit/                 # Unit tests
-│   ├── test_collector.py # Tests for collector.py
-│   ├── test_storage.py  # Tests for storage.py
-│   ├── test_server.py   # Tests for server.py
-│   └── test_terminal.py # Tests for terminal.py
-└── integration/         # Integration tests
-```
+For development and testing details, see PROJECT_SUMMARY.md.
 
 ### Code Quality
 
