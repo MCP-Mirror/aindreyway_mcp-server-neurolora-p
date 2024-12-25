@@ -42,8 +42,16 @@ def test_init_with_project_root(
     terminal_with_root: JsonRpcTerminal, project_root: Path
 ) -> None:
     """Test initialization with project root."""
-    assert terminal_with_root.project_root == project_root
-    assert terminal_with_root.collector.project_root == project_root
+    # Check that project_root is set
+    assert terminal_with_root.project_root is not None
+    assert isinstance(terminal_with_root.project_root, Path)
+    assert terminal_with_root.project_root.resolve() == project_root.resolve()
+
+    # Check that collector is initialized with correct project_root
+    assert terminal_with_root.collector is not None
+    collector_root = terminal_with_root.collector.project_root
+    assert isinstance(collector_root, Path)
+    assert collector_root.resolve() == project_root.resolve()
 
 
 @pytest.mark.parametrize(

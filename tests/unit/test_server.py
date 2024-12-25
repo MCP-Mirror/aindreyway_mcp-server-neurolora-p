@@ -57,7 +57,7 @@ class ToolMock(AsyncMock):
                     logger.warning(error_msg)
                     return error_msg
                 try:
-                    return await super().__call__(*args, **kwargs)
+                    return await AsyncMock.__call__(self, *args, **kwargs)
                 except OSError as e:
                     error_msg = f"File system error collecting code: {e}"
                     logger.warning(error_msg)
