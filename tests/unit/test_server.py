@@ -296,12 +296,12 @@ async def test_code_collector_tool_errors(
 
         result = await tool_mock("src/")
         assert expected_msg in result
-        if error != Exception:
+        if error is not Exception:
             assert "Test error" in result
 
         # Verify logging
         log_method = getattr(mock_logger, log_level)
-        if error == Exception:
+        if error is Exception:
             log_method.assert_called_with(
                 "Unexpected error collecting code: Test error", exc_info=True
             )
