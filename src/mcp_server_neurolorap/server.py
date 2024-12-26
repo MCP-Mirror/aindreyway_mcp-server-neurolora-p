@@ -8,6 +8,9 @@ from typing import Any, cast
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server_neurolorap.collector import CodeCollector
+from mcp_server_neurolorap.project_structure_reporter import (
+    ProjectStructureReporter,
+)
 from mcp_server_neurolorap.terminal import JsonRpcTerminal
 from mcp_server_neurolorap.types import FastMCPType
 
@@ -33,7 +36,42 @@ def create_server() -> FastMCPType:
     """Create and configure a new server instance."""
     mcp = FastMCP("neurolorap")
 
-    # Function is used through MCP tool registration, not directly
+    # Project structure reporter tool
+    async def project_structure_reporter(
+        output_filename: str = "PROJECT_STRUCTURE_REPORT.md",
+        ignore_patterns: list[str] | None = None,
+    ) -> str:
+        """Generate a report of project structure metrics."""
+        logger.debug("Tool call: project-structure-reporter")
+        logger.debug(
+            "Arguments: output_filename=%s, ignore_patterns=%s",
+            output_filename,
+            ignore_patterns,
+        )
+
+        try:
+            root_path = get_project_root()
+            reporter = ProjectStructureReporter(
+                root_dir=root_path,
+                ignore_patterns=ignore_patterns,
+            )
+
+            logger.info("Starting project structure analysis")
+            report_data = reporter.analyze_project_structure()
+
+            output_path = root_path / ".neurolora" / output_filename
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            reporter.generate_markdown_report(report_data, output_path)
+
+            return f"Project structure report generated: {output_path}"
+
+        except Exception as e:
+            error_msg = f"Unexpected error generating report: {e}"
+            logger.error(error_msg, exc_info=True)
+            return f"Error generating report: {str(e)}"
+
+    # Code collector tool
     async def code_collector(
         input_path: str | list[str],
         title: str = "Code Collection",
@@ -71,7 +109,12 @@ def create_server() -> FastMCPType:
             logger.error(error_msg, exc_info=True)
             return "No files found to process or error occurred"
 
-    # Register the tool with MCP
+    # Register tools with MCP
+    mcp.tool(
+        name="project_structure_reporter",
+        description="Generate a report of project structure metrics",
+    )(project_structure_reporter)
+
     mcp.tool(
         name="code_collector",
         description="Collect code from files into a markdown document",
