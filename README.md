@@ -4,22 +4,29 @@
 [![Tests](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml/badge.svg)](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml)
 [![codecov](https://codecov.io/gh/aindreyway/mcp-server-neurolorap/branch/main/graph/badge.svg)](https://codecov.io/gh/aindreyway/mcp-server-neurolorap)
 
-MCP server for collecting code from files and directories into a single markdown document.
+MCP server providing tools for code analysis and documentation.
 
 <a href="https://glama.ai/mcp/servers/rg07wseeqe"><img width="380" height="200" src="https://glama.ai/mcp/servers/rg07wseeqe/badge" alt="Server Neurolorap MCP server" /></a>
 
 ## Features
 
+### Code Collection Tool
+
 - Collect code from entire project
 - Collect code from specific directories or files
 - Collect code from multiple paths
-- Customizable ignore patterns via .neuroloraignore
 - Markdown output with syntax highlighting
 - Table of contents generation
 - Support for multiple programming languages
-- Developer mode with JSON-RPC terminal interface
-- Robust file system synchronization
-- Comprehensive error handling and logging
+
+### Project Structure Reporter Tool
+
+- Analyze project structure and metrics
+- Generate detailed reports in markdown format
+- File size and complexity analysis
+- Tree-based visualization
+- Recommendations for code organization
+- Customizable ignore patterns
 
 ## Quick Overview
 
@@ -31,7 +38,7 @@ uvx mcp-server-neurolorap
 pip install mcp-server-neurolorap
 ```
 
-You don't need to install or configure any dependencies manually. The tool will set up everything you need to collect and document code.
+You don't need to install or configure any dependencies manually. The tool will set up everything you need to analyze and document code.
 
 ## Installation
 
@@ -53,7 +60,7 @@ This will automatically:
 - Configure Cline integration
 - Set up the server for immediate use
 
-The server will be available through the MCP protocol in Cline. You can use it to collect and document code from any project.
+The server will be available through the MCP protocol in Cline. You can use it to analyze and document code from any project.
 
 ## Usage
 
@@ -71,6 +78,7 @@ Available commands:
 - `help`: Show available commands
 - `list_tools`: List available MCP tools
 - `collect <path>`: Collect code from specified path
+- `report [path]`: Generate project structure report
 - `exit`: Exit developer mode
 
 Example session:
@@ -81,14 +89,18 @@ Available commands:
 - help: Show this help message
 - list_tools: List available MCP tools
 - collect <path>: Collect code from specified path
+- report [path]: Generate project structure report
 - exit: Exit the terminal
 
 > list_tools
-["code-collector"]
+["code_collector", "project_structure_reporter"]
 
 > collect src
 Code collection complete!
 Output file: code_collection.md
+
+> report
+Project structure report generated: PROJECT_STRUCTURE_REPORT.md
 
 > exit
 Goodbye!
@@ -96,12 +108,14 @@ Goodbye!
 
 ### Through MCP Tools
 
+#### Code Collection
+
 ```python
 from modelcontextprotocol import use_mcp_tool
 
 # Collect code from entire project
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": ".",
         "title": "My Project"
@@ -110,7 +124,7 @@ result = use_mcp_tool(
 
 # Collect code from specific directory
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": "./src",
         "title": "Source Code"
@@ -119,10 +133,31 @@ result = use_mcp_tool(
 
 # Collect code from multiple paths
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": ["./src", "./tests"],
         "title": "Project Files"
+    }
+)
+```
+
+#### Project Structure Analysis
+
+```python
+# Generate project structure report
+result = use_mcp_tool(
+    "project_structure_reporter",
+    {
+        "output_filename": "PROJECT_STRUCTURE_REPORT.md"
+    }
+)
+
+# Analyze specific directory with custom ignore patterns
+result = use_mcp_tool(
+    "project_structure_reporter",
+    {
+        "output_filename": "src_structure.md",
+        "ignore_patterns": ["*.pyc", "__pycache__"]
     }
 )
 ```
@@ -246,6 +281,10 @@ The project uses GitHub Actions for continuous integration and deployment:
 - Uploads test artifacts
 
 The pipeline must pass before merging any changes.
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 

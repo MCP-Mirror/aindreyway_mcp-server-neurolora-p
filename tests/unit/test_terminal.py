@@ -34,6 +34,7 @@ def test_init_basic(terminal: JsonRpcTerminal) -> None:
         "help",
         "list_tools",
         "collect",
+        "report",
         "exit",
     }
 
@@ -158,7 +159,7 @@ async def test_cmd_list_tools(terminal: JsonRpcTerminal) -> None:
     """Test list_tools command."""
     result = await terminal.cmd_list_tools([])
     assert isinstance(result, list)
-    assert "code-collector" in result
+    assert "code_collector" in result
 
 
 @pytest.mark.asyncio
@@ -225,7 +226,7 @@ async def test_handle_command_invalid_params(
     }
     response = await terminal.handle_command(request)
     assert "error" in response
-    assert response["error"]["code"] == -32000
+    assert response["error"]["code"] == -32602
 
 
 @pytest.mark.asyncio
@@ -352,7 +353,7 @@ async def test_command_execution_flow(terminal: JsonRpcTerminal) -> None:
     response = await terminal.handle_command(request)
     assert "result" in response
     assert isinstance(response["result"], list)
-    assert "code-collector" in response["result"]
+    assert "code_collector" in response["result"]
 
     # Test exit command
     request = terminal.parse_request("exit")

@@ -9,13 +9,22 @@ This MCP server follows best practices for Model Context Protocol server develop
 
 ## Overview
 
-MCP server for collecting code from files and directories into a single markdown document. This server provides a tool for documenting code bases by generating comprehensive markdown files that include:
+MCP server providing tools for code analysis and documentation:
 
-- Code from specified files/directories
-- Syntax highlighting based on file extensions
-- Table of contents for easy navigation
-- Support for multiple programming languages
-- Customizable file ignore patterns
+1. Code Collection Tool:
+
+   - Collects code from files/directories into a single markdown document
+   - Syntax highlighting based on file extensions
+   - Table of contents for easy navigation
+   - Support for multiple programming languages
+   - Customizable file ignore patterns
+
+2. Project Structure Reporter Tool:
+   - Analyzes project structure and metrics
+   - Generates detailed reports in markdown format
+   - File size and complexity analysis
+   - Recommendations for code organization
+   - Tree-based visualization of project structure
 
 ## Architecture
 
@@ -29,6 +38,7 @@ mcp-server-neurolorap/
 │       ├── __init__.py          # Package initialization
 │       ├── server.py            # MCP server implementation
 │       ├── collector.py         # Code collection logic
+│       ├── project_structure_reporter.py  # Structure analysis
 │       ├── terminal.py          # Developer mode JSON-RPC terminal
 │       ├── storage.py           # Storage management
 │       ├── types.py            # Type definitions
@@ -44,6 +54,7 @@ mcp-server-neurolorap/
 ├── pyproject.toml            # Project configuration
 ├── README.md                # User documentation
 ├── .neuroloraignore        # Project ignore patterns
+├── pre-commit.py           # Pre-commit quality checks script with colored output
 └── LICENSE                  # MIT License
 ```
 
@@ -53,6 +64,7 @@ mcp-server-neurolorap/
 ~/.mcp-docs/                # Global storage directory
 └── <project-name>/         # Project-specific storage
     ├── FULL_CODE_*.md      # Generated code collections
+    ├── PROJECT_STRUCTURE_*.md  # Structure reports
     └── PROMPT_ANALYZE_*.md # Analysis prompts
 
 <project-root>/
@@ -71,7 +83,7 @@ mcp-server-neurolorap/
 1. **Server (server.py)**
 
    - Implements MCP protocol using FastMCP with modern Python features
-   - Exposes code collection tool with proper type hints
+   - Exposes code collection and structure analysis tools
    - Uses dependency injection for required packages
    - Handles request/response lifecycle with proper error handling
    - Includes developer mode with JSON-RPC terminal interface
@@ -90,7 +102,19 @@ mcp-server-neurolorap/
    - Markdown generation
    - Language detection
 
-4. **Storage (storage.py)**
+4. **Project Structure Reporter (project_structure_reporter.py)**
+
+   - Project structure analysis
+   - File metrics collection:
+     - Size analysis
+     - Line counting
+     - Token estimation
+   - Complexity assessment
+   - Report generation in markdown format
+   - Tree-based visualization
+   - Recommendations for code organization
+
+5. **Storage (storage.py)**
 
    - Manages file storage and organization
    - Creates and maintains .neurolora symlink in project root
@@ -103,7 +127,7 @@ mcp-server-neurolorap/
    - Manages .neuroloraignore patterns
    - Provides comprehensive error handling and logging
 
-5. **Configuration**
+6. **Configuration**
    - .neuroloraignore support
    - Default ignore patterns
    - Language mappings
@@ -188,15 +212,47 @@ tests/
 
    - **init**.py: 100% (fully covered)
    - **main**.py: 96% (missing lines 109, 169)
-   - collector.py: 83% (meets minimum requirement)
-   - server.py: 68% (needs improvement in lines 43-84 and condition 116->119)
+   - collector.py: 84% (meets minimum requirement)
+   - project_structure_reporter.py: 79% (needs improvement)
+   - server.py: 66% (needs improvement in lines 45-72, 81-110, 150->161, 158->161)
    - storage.py: 80% (meets minimum requirement)
-   - terminal.py: 94% (high coverage)
-   - types.py: 83% (meets minimum requirement)
+   - terminal.py: 71% (needs improvement)
+   - types.py: 85% (meets minimum requirement)
 
-   Total coverage: 83.65% (exceeds minimum requirement of 80%)
+   Total coverage: 80.04% (meets minimum requirement of 80%)
 
-### Running Tests
+### Pre-commit Checks
+
+Before committing code to GitHub, run the pre-commit script to ensure all quality standards are met:
+
+```bash
+# Run all checks using the pre-commit script
+python pre-commit.py
+```
+
+The script will automatically run all necessary checks in sequence with beautiful colored output:
+
+This command will:
+
+1. Run all tests with coverage reporting
+2. Format code with black
+3. Sort imports with isort
+4. Check code style with flake8
+5. Verify type hints with mypy
+
+The command will fail if any of these checks fail:
+
+- Tests must pass with minimum 80% coverage
+- Code must be properly formatted (black)
+- Imports must be properly sorted (isort)
+- No style violations (flake8)
+- No type errors (mypy)
+
+Only commit and push code when all checks pass successfully. This ensures our CI/CD pipelines will always succeed.
+
+### Running Individual Checks
+
+For development, you can run individual checks:
 
 ```bash
 # Run all tests
@@ -218,6 +274,18 @@ pytest --durations=10
 
 # Generate coverage report
 pytest --cov-report=html
+
+# Format code
+black .
+
+# Sort imports
+isort .
+
+# Check style
+flake8 .
+
+# Check types
+mypy src/mcp_server_neurolorap tests
 ```
 
 ## Developer Mode
@@ -232,6 +300,7 @@ python -m mcp_server_neurolorap --dev
 > help                    # Show available commands
 > list_tools             # List available MCP tools
 > collect <path>         # Collect code from specified path
+> report [path]          # Generate project structure report
 > exit                   # Exit developer mode
 ```
 
@@ -243,14 +312,18 @@ Available commands:
 - help: Show this help message
 - list_tools: List available MCP tools
 - collect <path>: Collect code from specified path
+- report [path]: Generate project structure report
 - exit: Exit the terminal
 
 > list_tools
-["code-collector"]
+["code_collector", "project_structure_reporter"]
 
 > collect src
 Code collection complete!
 Output file: code_collection.md
+
+> report
+Project structure report generated: PROJECT_STRUCTURE_REPORT.md
 
 > exit
 Goodbye!
@@ -312,10 +385,12 @@ Goodbye!
 
 ## Usage Examples
 
+### Code Collection
+
 ```python
 # Collect code from entire project
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": ".",
         "title": "My Project"
@@ -324,7 +399,7 @@ result = use_mcp_tool(
 
 # Collect code from specific directory
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": "./src",
         "title": "Source Code"
@@ -333,10 +408,31 @@ result = use_mcp_tool(
 
 # Collect code from multiple paths
 result = use_mcp_tool(
-    "code-collector",
+    "code_collector",
     {
         "input": ["./src", "./tests"],
         "title": "Project Files"
+    }
+)
+```
+
+### Project Structure Analysis
+
+```python
+# Generate project structure report
+result = use_mcp_tool(
+    "project_structure_reporter",
+    {
+        "output_filename": "PROJECT_STRUCTURE_REPORT.md"
+    }
+)
+
+# Analyze specific directory with custom ignore patterns
+result = use_mcp_tool(
+    "project_structure_reporter",
+    {
+        "output_filename": "src_structure.md",
+        "ignore_patterns": ["*.pyc", "__pycache__"]
     }
 )
 ```

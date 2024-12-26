@@ -101,6 +101,6 @@ def test_generate_markdown_report(temp_project: Path) -> None:
     assert output_path.exists()
     content = output_path.read_text()
     assert "# Project Structure Report" in content
-    assert "## Files" in content
+    assert "## Project Tree" in content
     assert "## Summary" in content
     assert "## Notes" in content

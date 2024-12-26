@@ -42,7 +42,7 @@ def create_server() -> FastMCPType:
         ignore_patterns: list[str] | None = None,
     ) -> str:
         """Generate a report of project structure metrics."""
-        logger.debug("Tool call: project-structure-reporter")
+        logger.debug("Tool call: project_structure_reporter")
         logger.debug(
             "Arguments: output_filename=%s, ignore_patterns=%s",
             output_filename,
@@ -73,12 +73,12 @@ def create_server() -> FastMCPType:
 
     # Code collector tool
     async def code_collector(
-        input_path: str | list[str],
+        input_path: str | list[str] = ".",
         title: str = "Code Collection",
         subproject_id: str | None = None,
     ) -> str:
         """Collect code from files into a markdown document."""
-        logger.debug("Tool call: code-collector")
+        logger.debug("Tool call: code_collector")
         logger.debug(
             "Arguments: input=%s, title=%s, subproject_id=%s",
             input_path,
@@ -111,20 +111,16 @@ def create_server() -> FastMCPType:
 
     # Register tools with MCP
     mcp.tool(
-        name="project_structure_reporter",
-        description="Generate a report of project structure metrics",
-    )(project_structure_reporter)
-
-    mcp.tool(
         name="code_collector",
         description="Collect code from files into a markdown document",
     )(code_collector)
 
+    mcp.tool(
+        name="project_structure_reporter",
+        description="Generate a report of project structure metrics",
+    )(project_structure_reporter)
+
     return cast(FastMCPType, mcp)
-
-
-# Initialize terminal for dev mode
-terminal = JsonRpcTerminal(project_root=str(get_project_root()))
 
 
 async def run_dev_mode() -> None:
@@ -132,6 +128,9 @@ async def run_dev_mode() -> None:
     print("Starting developer mode terminal...")
     print("Type 'help' for available commands")
     print("Type 'exit' to quit")
+
+    # Initialize terminal for dev mode
+    terminal = JsonRpcTerminal(project_root=str(get_project_root()))
 
     while True:
         try:
@@ -152,7 +151,8 @@ async def run_dev_mode() -> None:
                     isinstance(error, dict)
                     and "message" in error
                     and error["message"] is not None
-                    and str(error["message"]).strip()
+                    and isinstance(error["message"], str)
+                    and error["message"].strip()
                 ):
                     print(f"Error: {error['message']}")
             elif "result" in response:

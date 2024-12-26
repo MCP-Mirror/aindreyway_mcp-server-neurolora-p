@@ -11,10 +11,12 @@ from mcp_server_neurolorap.server import run_dev_mode
 @pytest.fixture
 def mock_terminal_fixture() -> Generator[MagicMock, None, None]:
     """Mock terminal fixture."""
-    with patch("mcp_server_neurolorap.server.terminal") as mock:
-        mock.parse_request = MagicMock()
-        mock.handle_command = AsyncMock()
-        yield mock
+    with patch("mcp_server_neurolorap.server.JsonRpcTerminal") as mock_class:
+        mock_instance = MagicMock()
+        mock_instance.parse_request = MagicMock()
+        mock_instance.handle_command = AsyncMock()
+        mock_class.return_value = mock_instance
+        yield mock_instance
 
 
 @pytest.mark.asyncio

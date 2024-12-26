@@ -55,6 +55,7 @@ class JsonRpcTerminal:
             "help": self.cmd_help,
             "list_tools": self.cmd_list_tools,
             "collect": self.cmd_collect,
+            "report": self.cmd_project_structure_reporter,
             "exit": self.cmd_exit,
         }
 
@@ -93,10 +94,8 @@ class JsonRpcTerminal:
 
             # Validate command (first part)
             command = parts[0]
-            if (
-                not command.isalnum()
-                and not command.replace("_", "").isalnum()
-            ):
+            # Allow commands with hyphens
+            if not command.replace("-", "").replace("_", "").isalnum():
                 return None
 
             # Get params (remaining parts)
@@ -154,12 +153,24 @@ class JsonRpcTerminal:
             handler = self.commands[method]
             params = request.get("params", [])
             if not isinstance(params, list):
-                params = []
+                return self.format_response(
+                    None,
+                    {
+                        "code": -32602,
+                        "message": "Invalid params: must be a list",
+                    },
+                )
             result = await handler(params)
             return self.format_response(result)
+        except ValueError as e:
+            return self.format_response(
+                None,
+                {"code": -32602, "message": str(e)},
+            )
         except Exception as e:
             return self.format_response(
-                None, {"code": -32000, "message": str(e)}
+                None,
+                {"code": -32000, "message": str(e)},
             )
 
     async def cmd_help(self, params: List[str]) -> str:
@@ -167,13 +178,15 @@ class JsonRpcTerminal:
         return """Available commands:
 - help: Show this help message
 - list_tools: List available MCP tools
-- collect <path> [subproject_id]: Collect code from specified path.
-  Optional subproject_id for organizing files in subdirectories.
+- collect [path] [subproject_id]: Collect code from specified path.
+  Path and subproject_id are optional (defaults to entire project).
+- report [path]: Generate project structure report.
+  Optional path to analyze (defaults to entire project).
 - exit: Exit the terminal"""
 
     async def cmd_list_tools(self, params: List[str]) -> List[str]:
         """List available MCP tools."""
-        return ["code-collector"]  # Static list for now
+        return ["code_collector", "report"]
 
     async def cmd_collect(self, params: List[str]) -> Dict[str, str]:
         """Execute code collection.
@@ -183,19 +196,14 @@ class JsonRpcTerminal:
                    - params[0]: Path to collect code from
                    - params[1]: Optional subproject_id
         """
-        if not params:
-            raise ValueError("Path parameter required")
-
         if not self.collector:
             raise ValueError("Code collector not initialized")
 
-        # Remove quotes if present
-        path = params[0].strip("\"'")
+        if not params:
+            raise ValueError("Path parameter required")
 
-        # Get optional subproject_id
-        subproject_id = None
-        if len(params) > 1:
-            subproject_id = params[1].strip("\"'")
+        path = params[0].strip("\"'")
+        subproject_id = params[1].strip("\"'") if len(params) > 1 else None
 
         # Use existing collector for collecting code
         output_file = self.collector.collect_code(path, "Code Collection")
@@ -210,6 +218,60 @@ class JsonRpcTerminal:
                 f"Subproject ID: {subproject_id or 'None'}"
             )
         }
+
+    async def cmd_project_structure_reporter(
+        self, params: List[str]
+    ) -> Dict[str, str]:
+        """Execute project structure report generation.
+
+        Args:
+            params: List of parameters:
+                   - params[0]: Optional path to analyze
+        """
+        if not self.project_root:
+            raise ValueError("Project root not initialized")
+
+        if not self.collector:
+            raise ValueError("Code collector not initialized")
+
+        # Get optional path parameter and set output filename
+        analyze_path = self.project_root
+        output_filename = "PROJECT_STRUCTURE_REPORT.md"
+        if params:
+            path = params[0].strip("\"'")
+            analyze_path = self.project_root / path
+            path_slug = path.replace("/", "_").replace("\\", "_")
+            output_filename = f"PROJECT_STRUCTURE_REPORT_{path_slug}.md"
+
+        # Initialize storage
+        from .collector import CodeCollector
+        from .storage import StorageManager
+
+        storage = StorageManager(self.project_root)
+        storage.setup()  # Create .neuroloraignore if needed
+
+        # Create temporary collector to load ignore patterns
+        temp_collector = CodeCollector(project_root=self.project_root)
+        ignore_patterns = temp_collector.load_ignore_patterns()
+
+        # Create reporter with ignore patterns
+        from mcp_server_neurolorap.project_structure_reporter import (
+            ProjectStructureReporter,
+        )
+
+        reporter = ProjectStructureReporter(
+            root_dir=analyze_path,
+            ignore_patterns=ignore_patterns,
+        )
+
+        # Generate report
+        report_data = reporter.analyze_project_structure()
+
+        output_path = self.project_root / ".neurolora" / output_filename
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        reporter.generate_markdown_report(report_data, output_path)
+
+        return {"result": f"Project structure report generated: {output_path}"}
 
     async def cmd_exit(self, params: List[str]) -> str:
         """Exit the terminal."""

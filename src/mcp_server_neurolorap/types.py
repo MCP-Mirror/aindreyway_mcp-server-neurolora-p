@@ -34,7 +34,7 @@ class FastMCPType(Protocol):
     # 1. It can be called directly with a function: @tool
     # 2. It can be called with config args: @tool(name="x", description="y")
     # This makes static typing challenging, so we use Any
-    tool: Any
+    tool: Callable[[str], Callable[..., Coroutine[Any, Any, str]]]
     run: Callable[[], None] | None
     tool_called: bool
     tools: Dict[str, ToolFunction]
