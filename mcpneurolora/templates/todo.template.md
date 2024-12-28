@@ -1,6 +1,6 @@
 # Project TODO List
 
-This document outlines current issues and improvements needed in the MCP Server Neurolorap project. Each item is categorized and prioritized for easy reference by AI assistants.
+This document outlines current issues and improvements needed in the MCP Server NeuroLoRA project. Each item is categorized and prioritized for easy reference by AI assistants.
 
 ## Issue Categories
 

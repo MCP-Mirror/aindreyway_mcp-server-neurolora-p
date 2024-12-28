@@ -25,24 +25,13 @@ class ToolMock(AsyncMock):
         *args: Any,
         **kwargs: Any,
     ) -> str:
-        from mcp_server_neurolorap.server import logger
+        from mcpneurolora.server import logger
 
         try:
             input_val = args[0] if args else kwargs.get("input_path")
             title = kwargs.get("title", "Code Collection")
-            subproject_id = kwargs.get("subproject_id")
 
-            logger.debug("Tool call: code-collector")
-            logger.debug(
-                "Arguments: input=%s, title=%s, subproject_id=%s",
-                input_val,
-                title,
-                subproject_id,
-            )
             logger.info("Starting code collection")
-            logger.debug("Input: %s", input_val)
-            logger.debug("Title: %s", title)
-            logger.debug("Subproject ID: %s", subproject_id)
 
             if self.side_effect is not None:
                 raise self.side_effect
@@ -100,8 +89,8 @@ class MockFastMCP:
 @pytest.fixture
 def mock_fastmcp() -> Generator[MockFastMCP, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolorap.server.FastMCP") as mock:
-        mock_server = MockFastMCP("neurolorap")
+    with patch("mcpneurolora.server.FastMCP") as mock:
+        mock_server = MockFastMCP("neurolora")
         mock.return_value = mock_server
         yield mock_server
 
@@ -109,7 +98,7 @@ def mock_fastmcp() -> Generator[MockFastMCP, None, None]:
 @pytest.fixture
 def mock_terminal() -> Generator[MagicMock, None, None]:
     """Mock JsonRpcTerminal."""
-    with patch("mcp_server_neurolorap.server.terminal") as mock:
+    with patch("mcpneurolora.server.terminal") as mock:
         mock.parse_request = MagicMock()
         mock.handle_command = AsyncMock()
         yield mock
@@ -118,5 +107,5 @@ def mock_terminal() -> Generator[MagicMock, None, None]:
 @pytest.fixture
 def mock_logger() -> Generator[MagicMock, None, None]:
     """Mock logger."""
-    with patch("mcp_server_neurolorap.server.logger") as mock_logger:
+    with patch("mcpneurolora.server.logger") as mock_logger:
         yield mock_logger

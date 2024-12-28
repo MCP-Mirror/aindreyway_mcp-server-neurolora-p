@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, NonCallableMock, patch
 
 import pytest
 
-from mcp_server_neurolorap.server import create_server
+from mcpneurolora.server import run_mcp_server
 
 
 class CodeCollectorToolMock(AsyncMock):
@@ -109,9 +109,9 @@ class ProjectStructureReporterToolMock(AsyncMock):
 @pytest.fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolorap.server.FastMCP") as mock:
+    with patch("mcpneurolora.server.FastMCP") as mock:
         mock_server = MagicMock()
-        mock_server.name = "neurolorap"
+        mock_server.name = "neurolora"
         mock_server.tools = {
             "project_structure_reporter": ProjectStructureReporterToolMock(),
             "code_collector": CodeCollectorToolMock(),
@@ -123,7 +123,8 @@ def mock_fastmcp() -> Generator[MagicMock, None, None]:
 
 @pytest.mark.asyncio
 async def test_project_structure_reporter_success(
-    tmp_path: Path, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test successful project structure report generation."""
     # Call tool through mock server
@@ -138,7 +139,8 @@ async def test_project_structure_reporter_success(
 
 @pytest.mark.asyncio
 async def test_code_collector_success(
-    tmp_path: Path, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test successful code collection."""
     # Call tool through mock server
@@ -155,10 +157,11 @@ async def test_code_collector_success(
 
 @pytest.mark.asyncio
 async def test_project_structure_reporter_error_handling(
-    tmp_path: Path, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test error handling in project structure reporter."""
-    create_server()
+    run_mcp_server()
     tool = mock_fastmcp.tools["project_structure_reporter"]
     tool.set_side_effect(ValueError("Invalid configuration"))
     result = await tool()
@@ -167,10 +170,11 @@ async def test_project_structure_reporter_error_handling(
 
 @pytest.mark.asyncio
 async def test_code_collector_error_handling(
-    tmp_path: Path, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test error handling in code collector."""
-    create_server()
+    run_mcp_server()
     tool = mock_fastmcp.tools["code_collector"]
     tool.set_side_effect(ValueError("Invalid configuration"))
     result = await tool()

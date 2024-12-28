@@ -1,6 +1,6 @@
 # Completed Project Tasks
 
-This document tracks completed tasks and improvements in the MCP Server Neurolorap project. Each item is categorized and includes completion details.
+This document tracks completed tasks and improvements in the MCP Server NeuroLoRA project. Each item is categorized and includes completion details.
 
 ## Task Categories
 

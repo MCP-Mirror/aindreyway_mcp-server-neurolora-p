@@ -1,17 +1,17 @@
-"""Module for analyzing and reporting project structure metrics.
-
-This module provides functionality to analyze project structure, including:
-- File size analysis
-- Line counting
-- Token estimation
-- Report generation in markdown format
-"""
+"""Project structure analysis and reporting."""
 
 import fnmatch
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, TypedDict
+from typing import List, Optional, TextIO, TypedDict, cast
+
+from ..file_naming import FileType, format_filename, get_file_pattern
+from ..storage import StorageManager
+from ..logging import get_logger, LogCategory
+
+# Get module logger
+logger = get_logger(__name__, LogCategory.TOOLS)
 
 
 class FileData(TypedDict):
@@ -38,13 +38,13 @@ class ReportData(TypedDict):
     error_files: int
 
 
-class ProjectStructureReporter:
-    """Analyzes project structure and generates reports on file metrics."""
+class Reporter:
+    """Main class for analyzing project structure."""
 
     def __init__(
         self, root_dir: Path, ignore_patterns: Optional[List[str]] = None
-    ):
-        """Initialize reporter with root directory and ignore patterns.
+    ) -> None:
+        """Initialize the Reporter.
 
         Args:
             root_dir: Root directory to analyze
@@ -53,6 +53,10 @@ class ProjectStructureReporter:
         self.root_dir = root_dir
         self.large_file_threshold = 1024 * 1024  # 1MB
         self.large_lines_threshold = 300
+
+        # Initialize storage manager
+        self.storage = StorageManager(root_dir)
+        self.storage.setup()
 
         # Load ignore patterns from .neuroloraignore and combine with provided
         # patterns
@@ -78,13 +82,14 @@ class ProjectStructureReporter:
                         # Skip empty lines and comments
                         if line and not line.startswith("#"):
                             patterns.append(line)
-        except (
-            FileNotFoundError,
-            PermissionError,
-            UnicodeDecodeError,
-            IOError,
-        ):
-            pass
+        except FileNotFoundError:
+            logger.warning("Could not find .neuroloraignore file")
+        except PermissionError:
+            logger.error("Permission denied accessing .neuroloraignore")
+        except UnicodeDecodeError:
+            logger.error("Invalid file encoding in .neuroloraignore")
+        except OSError as e:
+            logger.error("System error reading .neuroloraignore: %s", str(e))
 
         return patterns
 
@@ -115,20 +120,20 @@ class ProjectStructureReporter:
                 ):
                     return True
 
-            # Additional checks
-            if "FULL_CODE_" in str(path):
-                return True
+            # Check for generated files using new naming patterns
+            for file_type in FileType:
+                if get_file_pattern(file_type).match(str(path)):
+                    return True
 
             # Always ignore .neuroloraignore files
             if path.name == ".neuroloraignore":
                 return True
 
             try:
-                if (
-                    path.exists() and path.stat().st_size > 1024 * 1024
-                ):  # Skip files > 1MB
+                if path.exists() and path.stat().st_size > 1024 * 1024:
                     return True
-            except (FileNotFoundError, PermissionError):
+            except (FileNotFoundError, PermissionError) as e:
+                logger.error("Error checking file size: %s", str(e))
                 return True
 
             return False
@@ -154,7 +159,14 @@ class ProjectStructureReporter:
             # If not binary, count lines
             with filepath.open("r", encoding="utf-8") as f:
                 return sum(1 for line in f if line.strip())
-        except (UnicodeDecodeError, OSError):
+        except UnicodeDecodeError:
+            logger.warning("Binary file detected: %s", filepath)
+            return 0
+        except (FileNotFoundError, PermissionError) as e:
+            logger.error("Error accessing file %s: %s", filepath, str(e))
+            return 0
+        except OSError as e:
+            logger.error("System error reading file %s: %s", filepath, str(e))
             return 0
 
     def estimate_tokens(self, size_bytes: int) -> int:
@@ -175,38 +187,52 @@ class ProjectStructureReporter:
             filepath: Path to file
 
         Returns:
-            dict: File metrics including size, lines, and tokens
+            FileData: File metrics including size, lines, and tokens
         """
         try:
             size_bytes = filepath.stat().st_size
 
             # Skip detailed analysis for large files
             if size_bytes > self.large_file_threshold:
-                return {
-                    "path": str(filepath.relative_to(self.root_dir)),
-                    "size_bytes": size_bytes,
-                    "tokens": 0,
-                    "lines": 0,
-                    "is_large": True,
-                    "is_complex": False,
-                    "error": False,
-                }
+                return cast(
+                    FileData,
+                    {
+                        "path": str(filepath.relative_to(self.root_dir)),
+                        "size_bytes": size_bytes,
+                        "tokens": 0,
+                        "lines": 0,
+                        "is_large": True,
+                        "is_complex": False,
+                        "error": False,
+                    },
+                )
 
             lines = self.count_lines(filepath)
             tokens = self.estimate_tokens(size_bytes)
 
-            return {
-                "path": str(filepath.relative_to(self.root_dir)),
-                "size_bytes": size_bytes,
-                "tokens": tokens,
-                "lines": lines,
-                "is_large": False,
-                "is_complex": lines > self.large_lines_threshold,
-                "error": False,
-            }
-        except OSError:
-            # Handle file access errors gracefully
-            return {
+            return cast(
+                FileData,
+                {
+                    "path": str(filepath.relative_to(self.root_dir)),
+                    "size_bytes": size_bytes,
+                    "tokens": tokens,
+                    "lines": lines,
+                    "is_large": False,
+                    "is_complex": lines > self.large_lines_threshold,
+                    "error": False,
+                },
+            )
+        except FileNotFoundError:
+            logger.error("File not found: %s", filepath)
+        except PermissionError:
+            logger.error("Permission denied accessing file: %s", filepath)
+        except OSError as e:
+            logger.error("System error analyzing file %s: %s", filepath, str(e))
+
+        # Return error data for any failure
+        return cast(
+            FileData,
+            {
                 "path": str(filepath.relative_to(self.root_dir)),
                 "size_bytes": 0,
                 "tokens": 0,
@@ -214,13 +240,14 @@ class ProjectStructureReporter:
                 "is_large": False,
                 "is_complex": False,
                 "error": True,
-            }
+            },
+        )
 
     def analyze_project_structure(self) -> ReportData:
         """Analyze entire project structure.
 
         Returns:
-            dict: Project metrics including all files and totals
+            ReportData: Project metrics including all files and totals
         """
         report_data: ReportData = {
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -258,6 +285,35 @@ class ProjectStructureReporter:
                     report_data["total_tokens"] += file_data["tokens"]
 
         return report_data
+
+    def generate_report(self) -> Optional[Path]:
+        """Generate project structure report.
+
+        Returns:
+            Optional[Path]: Path to generated report or None if failed
+        """
+        try:
+            # Analyze project structure
+            report_data = self.analyze_project_structure()
+
+            # Create output file with new naming scheme
+            output_path = self.storage.get_output_path(
+                format_filename(FileType.FULL_TREE)
+            )
+
+            # Generate markdown report
+            self.generate_markdown_report(report_data, output_path)
+
+            return output_path
+        except (ValueError, TypeError) as e:
+            logger.error("Invalid input error: %s", str(e))
+            return None
+        except OSError as e:
+            logger.error("System error: %s", str(e))
+            return None
+        except RuntimeError as e:
+            logger.error("Runtime error: %s", str(e))
+            return None
 
     def generate_markdown_report(
         self, report_data: ReportData, output_path: Path
@@ -307,7 +363,7 @@ class ProjectStructureReporter:
                 # Write file entry
                 f.write("│   " * len(current_path))
                 f.write("├── ")
-                self._write_file_entry(f, file_data, tree_format=True)
+                self._write_file_entry(f, file_data)
 
             # Summary
             f.write("\n## Summary\n\n")
@@ -328,7 +384,7 @@ class ProjectStructureReporter:
             f.write("- 📦 File size indicators:\n")
             f.write("  - Files larger than 1MB are marked as large files\n")
             f.write(
-                "  - Size is shown in KB for files ≥ 1KB, " "bytes otherwise\n"
+                "  - Size is shown in KB for files ≥ 1KB, bytes otherwise\n"
             )
             f.write("- 📊 Code metrics:\n")
             f.write("  - 🔴 indicates files with more than 300 lines\n")
@@ -357,8 +413,8 @@ class ProjectStructureReporter:
                         lines
                     )
                     avg_lines = lines // suggested_modules
-                    f.write(f"- {file_data['path']} ({lines} lines) 🔴\n")
                     f.write(
+                        f"- {file_data['path']} ({lines} lines) 🔴\n"
                         f"  - Consider splitting into {suggested_modules} "
                         f"modules of ~{avg_lines} lines each\n"
                     )
@@ -367,6 +423,9 @@ class ProjectStructureReporter:
                     "No files currently exceed the recommended "
                     "size limit (300 lines).\n"
                 )
+
+            # Ensure file is written
+            f.flush()
 
     def _calculate_suggested_modules(self, lines: int) -> int:
         """Calculate suggested number of modules for splitting a file.
@@ -381,9 +440,7 @@ class ProjectStructureReporter:
             lines + self.large_lines_threshold - 1
         ) // self.large_lines_threshold
 
-    def _write_file_entry(
-        self, f: Any, file_data: FileData, tree_format: bool = False
-    ) -> None:
+    def _write_file_entry(self, f: TextIO, file_data: FileData) -> None:
         """Write a single file entry in the report.
 
         Args:
@@ -404,7 +461,9 @@ class ProjectStructureReporter:
             f.write(f"{filename} ({size_str}) ⚠️ Large file\n")
         else:
             complexity_marker = "🔴" if file_data["is_complex"] else ""
+            tokens_str = f"~{file_data['tokens']} tokens"
+            lines_str = f"{file_data['lines']} lines"
             f.write(
-                f"{filename} ({size_str}, ~{file_data['tokens']} tokens, "
-                f"{file_data['lines']} lines) {complexity_marker}\n"
+                f"{filename} ({size_str}, {tokens_str}, "
+                f"{lines_str}) {complexity_marker}\n"
             )

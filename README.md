@@ -1,16 +1,20 @@
-# MCP Server Neurolorap
+# NeuroLoRA MCP Server
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml/badge.svg)](https://github.com/aindreyway/mcp-server-neurolorap/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/aindreyway/mcp-server-neurolorap/branch/main/graph/badge.svg)](https://codecov.io/gh/aindreyway/mcp-server-neurolorap)
+[![Tests](https://github.com/aindreyway/aindreyway-mcp-server-neurolora/actions/workflows/tests.yml/badge.svg)](https://github.com/aindreyway/aindreyway-mcp-server-neurolora/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/aindreyway/aindreyway-mcp-server-neurolora/branch/main/graph/badge.svg)](https://codecov.io/gh/aindreyway/aindreyway-mcp-server-neurolora)
 
 MCP server providing tools for code analysis and documentation.
 
-<a href="https://glama.ai/mcp/servers/rg07wseeqe"><img width="380" height="200" src="https://glama.ai/mcp/servers/rg07wseeqe/badge" alt="Server Neurolorap MCP server" /></a>
+<a href="https://glama.ai/mcp/servers/rg07wseeqe"><img width="380" height="200" src="https://glama.ai/mcp/servers/rg07wseeqe/badge" alt="NeuroLoRA MCP server" /></a>
 
 ## Features
 
-### Code Collection Tool
+The server provides two levels of functionality:
+
+### Base Tools (Always Available)
+
+#### Code Collection Tool
 
 - Collect code from entire project
 - Collect code from specific directories or files
@@ -19,7 +23,7 @@ MCP server providing tools for code analysis and documentation.
 - Table of contents generation
 - Support for multiple programming languages
 
-### Project Structure Reporter Tool
+#### Project Structure Reporter Tool
 
 - Analyze project structure and metrics
 - Generate detailed reports in markdown format
@@ -28,14 +32,111 @@ MCP server providing tools for code analysis and documentation.
 - Recommendations for code organization
 - Customizable ignore patterns
 
+### MCP Prompts
+
+The server provides a set of MCP prompts for standardized LLM interactions:
+
+#### Command Help Prompts
+
+- Detailed help for each command
+- Usage examples and parameters
+- Command-specific tips
+- Access via `prompts://commands/{command}/help`
+
+#### Command Menu Prompts
+
+- List of available commands
+- Command descriptions and previews
+- Quick access to common actions
+- Access via `prompts://commands/menu`
+
+#### Command Suggestions
+
+- Context-aware next action suggestions
+- Error recovery recommendations
+- Success path guidance
+- Access via `prompts://commands/{command}/suggest`
+
+#### Command Routing
+
+- Natural language command routing
+- Pattern-based command matching
+- Confidence scoring
+- Multilingual support:
+  - English commands: "collect code", "analyze code", "show structure"
+  - Russian commands: "собери код", "собрать код", "покажи структуру"
+- Access via `prompts://commands`
+
+### AI-Powered Tools
+
+These tools are available only when AI model and API key are configured in Cline settings. Currently tested and supported only in Cline (not tested with Claude Desktop or other clients).
+
+#### Code Improvement Tool
+
+- AI-powered code analysis and suggestions
+- Support for multiple AI providers:
+  - OpenAI models:
+    - o1 (200k tokens)
+    - o1-preview (128k tokens)
+    - o1-preview-2024-09-12 (128k tokens)
+  - Gemini models:
+    - gemini-2.0-flash-exp (1M tokens)
+    - gemini-2.0-flash-thinking-exp-1219 (32k tokens)
+  - Anthropic models:
+    - claude-3-opus-20240229 (200k tokens)
+    - claude-3-sonnet-20240229 (200k tokens)
+    - claude-3-haiku-20240307 (200k tokens)
+- Progress tracking with ETA estimation
+- 5-minute timeout for AI operations
+- Generated files:
+  - CODE\_\*.md - collected source code
+  - IMPROVE*PROMPT*\*.md - analysis prompt
+  - IMPROVE*RESULT*\*.md - analysis result
+
+#### Code Request Tool
+
+- Process natural language requests for code changes
+- AI-powered implementation planning
+- Same provider support as Improvement Tool
+- Progress tracking and timeout handling
+- Generated files:
+  - CODE\_\*.md - collected source code
+  - REQUEST*PROMPT*\*.md - request prompt
+  - REQUEST*RESULT*\*.md - request result
+
+## Configuration
+
+### Cline Settings
+
+To enable AI-powered tools, add the following to your Cline settings:
+
+```json
+{
+  "mcpServers": {
+    "aindreyway-neurolora": {
+      "command": "uvx",
+      "args": ["mcp-server-neurolora"],
+      "env": {
+        "AI_MODEL": "o1-preview", // One of the supported models
+        "OPENAI_API_KEY": "your-api-key", // Required for OpenAI models
+        "GEMINI_API_KEY": "your-api-key", // Required for Gemini models
+        "ANTHROPIC_API_KEY": "your-api-key" // Required for Anthropic models
+      }
+    }
+  }
+}
+```
+
+Note: The server has been tested only with Cline and may not work correctly with other MCP clients.
+
 ## Quick Overview
 
 ```sh
 # Using uvx (recommended)
-uvx mcp-server-neurolorap
+uvx mcp-server-neurolora
 
 # Or using pip (not recommended)
-pip install mcp-server-neurolorap
+pip install mcp-server-neurolora
 ```
 
 You don't need to install or configure any dependencies manually. The tool will set up everything you need to analyze and document code.
@@ -48,10 +149,10 @@ To install and run the server:
 
 ```sh
 # Install using uvx (recommended)
-uvx mcp-server-neurolorap
+uvx mcp-server-neurolora
 
 # Or install using pip (not recommended)
-pip install mcp-server-neurolorap
+pip install mcp-server-neurolora
 ```
 
 This will automatically:
@@ -70,7 +171,7 @@ The server includes a developer mode with JSON-RPC terminal interface for direct
 
 ```bash
 # Start the server in developer mode
-python -m mcp_server_neurolorap --dev
+python -m mcp_server_neurolora --dev
 ```
 
 Available commands:
@@ -107,6 +208,33 @@ Goodbye!
 ```
 
 ### Through MCP Tools
+
+#### Using MCP Prompts
+
+```python
+from modelcontextprotocol import use_mcp_resource
+
+# Get help for a command
+help_text = await use_mcp_resource(
+    "aindreyway-neurolora",
+    "prompts://commands/improve/help"
+)
+
+# Get command menu
+menu = await use_mcp_resource(
+    "aindreyway-neurolora",
+    "prompts://commands/menu"
+)
+
+# Get suggestions after command execution
+suggestions = await use_mcp_resource(
+    "aindreyway-neurolora",
+    "prompts://commands/improve/suggest"
+)
+
+# The prompts help standardize interactions with the server
+# and provide consistent guidance for users
+```
 
 #### Code Collection
 
@@ -160,6 +288,34 @@ result = use_mcp_tool(
         "ignore_patterns": ["*.pyc", "__pycache__"]
     }
 )
+```
+
+#### AI-Powered Tools (Requires Configuration)
+
+Note: These tools are available only when AI model and API key are configured in Cline settings.
+
+```python
+# Analyze code and suggest improvements
+result = use_mcp_tool(
+    "improve",
+    {
+        "input_path": ".",  # Analyze entire project
+    }
+)
+
+# Process code change request
+result = use_mcp_tool(
+    "request",
+    {
+        "input_path": ".",  # Target entire project
+        "request_text": "Add error handling to all API calls"
+    }
+)
+
+# Generated files will be available in .neurolora/ directory:
+# - CODE_*.md - collected source code
+# - IMPROVE_PROMPT_*.md/REQUEST_PROMPT_*.md - analysis prompt
+# - IMPROVE_RESULT_*.md/REQUEST_RESULT_*.md - analysis result
 ```
 
 ### File Storage
@@ -227,10 +383,10 @@ pip install -e ".[dev]"
 
 ```sh
 # Normal mode (MCP server with stdio transport)
-python -m mcp_server_neurolorap
+python -m mcp_server_neurolora
 
 # Developer mode (JSON-RPC terminal interface)
-python -m mcp_server_neurolorap --dev
+python -m mcp-server-neurolora --dev
 ```
 
 ### Testing

@@ -1,6 +1,6 @@
-# Contributing to MCP Server Neurolorap
+# Contributing to MCP Server NeuroLoRA
 
-We love your input! We want to make contributing to MCP Server Neurolorap as easy and transparent as possible, whether it's:
+We love your input! We want to make contributing to MCP Server NeuroLoRA as easy and transparent as possible, whether it's:
 
 - Reporting a bug
 - Discussing the current state of the code
@@ -29,9 +29,9 @@ We use GitHub to host code, to track issues and feature requests, as well as acc
 
 In short, when you submit code changes, your submissions are understood to be under the same [MIT License](http://choosealicense.com/licenses/mit/) that covers the project. Feel free to contact the maintainers if that's a concern.
 
-## Report Bugs Using GitHub's [Issue Tracker](https://github.com/aindreyway/mcp-server-neurolorap/issues)
+## Report Bugs Using GitHub's [Issue Tracker](https://github.com/aindreyway/mcp-server-neurolora/issues)
 
-We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/aindreyway/mcp-server-neurolorap/issues/new).
+We use GitHub issues to track public bugs. Report a bug by [opening a new issue](https://github.com/aindreyway/mcp-server-neurolora/issues/new).
 
 ## Write Bug Reports with Detail, Background, and Sample Code
 
@@ -61,7 +61,7 @@ The core team looks at Pull Requests on a regular basis. After feedback has been
 
 ## Community
 
-Discussions about the project take place on this repository's [Issues](https://github.com/aindreyway/mcp-server-neurolorap/issues) and [Pull Requests](https://github.com/aindreyway/mcp-server-neurolorap/pulls) sections. Anybody is welcome to join these conversations.
+Discussions about the project take place on this repository's [Issues](https://github.com/aindreyway/mcp-server-neurolora/issues) and [Pull Requests](https://github.com/aindreyway/mcp-server-neurolora/pulls) sections. Anybody is welcome to join these conversations.
 
 ## Testing
 
@@ -78,7 +78,7 @@ To run tests:
 pytest
 
 # Run with coverage
-pytest --cov=mcp_server_neurolorap
+pytest --cov=mcp_server_neurolora
 
 # Run specific test categories
 pytest -m unit          # Unit tests
@@ -94,7 +94,7 @@ pytest -m integration   # Integration tests
 
 ## Versioning
 
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/aindreyway/mcp-server-neurolorap/tags).
+We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/aindreyway/mcp-server-neurolora/tags).
 
 ## License
 

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, NonCallableMock, patch
 
-import pytest
+from pytest import fixture, mark
 
-from mcp_server_neurolorap.server import create_server
+from mcpneurolora.server import run_mcp_server
 
 
 class ToolMock(AsyncMock):
@@ -55,7 +55,6 @@ class ToolMock(AsyncMock):
     ) -> str:
         try:
             input_val = args[0] if args else kwargs.get("input_path")
-            title = kwargs.get("title", "Code Collection")
 
             if self.side_effect is not None:
                 raise self.side_effect
@@ -65,7 +64,7 @@ class ToolMock(AsyncMock):
                 return "Code collection complete!\nOutput file: output.md"
 
             output = await self._collector.collect_code(
-                cast(str | list[str], input_val), cast(str, title)
+                cast(str | list[str], input_val)
             )
             if output is None:
                 return "No files found to process or error occurred"
@@ -75,19 +74,19 @@ class ToolMock(AsyncMock):
             return "No files found to process or error occurred"
 
 
-@pytest.fixture
+@fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolorap.server.FastMCP") as mock:
+    with patch("mcp_server_neurolora.server.FastMCP") as mock:
         mock_server = MagicMock()
-        mock_server.name = "neurolorap"
+        mock_server.name = "neurolora"
         mock_server.tools = {"code_collector": ToolMock()}
         mock_server.tool_called = False
         mock.return_value = mock_server
         yield mock_server
 
 
-@pytest.fixture
+@fixture
 def mock_collector(project_root: Path) -> Generator[AsyncMock, None, None]:
     """Mock CodeCollector."""
     mock_instance = AsyncMock()
@@ -95,13 +94,13 @@ def mock_collector(project_root: Path) -> Generator[AsyncMock, None, None]:
         return_value=project_root / "output.md"
     )
     with patch(
-        "mcp_server_neurolorap.server.CodeCollector",
+        "mcp_server_neurolora.server.CodeCollector",
         return_value=mock_instance,
     ):
         yield mock_instance
 
 
-@pytest.mark.asyncio
+@mark.asyncio
 async def test_code_collector_tool_logging(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
@@ -112,28 +111,26 @@ async def test_code_collector_tool_logging(
     output_path = project_root / "output.md"
     mock_collector.collect_code.return_value = output_path
 
-    # Create server to initialize tools
-    create_server()
+    # Initialize and run MCP server
+    await run_mcp_server()
     tool_mock = mock_fastmcp.tools["code_collector"]
     tool_mock.set_collector(mock_collector)
 
     # Test detailed logging
-    result = await tool_mock(
-        input_path="src/", title="Test Title", subproject_id="test-sub"
-    )
+    result = await tool_mock(input_path="src/")
 
     # Verify output
     assert "Code collection complete!" in result
     assert str(output_path) in result
 
 
-@pytest.mark.asyncio
+@mark.asyncio
 async def test_code_collector_tool_errors(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
 ) -> None:
     """Test error handling in code collector tool."""
-    create_server()
+    await run_mcp_server()
     tool_mock = mock_fastmcp.tools["code_collector"]
     tool_mock.set_collector(mock_collector)
 
@@ -162,14 +159,14 @@ async def test_code_collector_tool_errors(
     assert result == "No files found to process or error occurred"
 
 
-@pytest.mark.asyncio
+@mark.asyncio
 async def test_code_collector_input_types_and_edge_cases(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
     project_root: Path,
 ) -> None:
     """Test code collector tool with different input types and edge cases."""
-    create_server()
+    await run_mcp_server()
     tool_mock = mock_fastmcp.tools["code_collector"]
     tool_mock.set_collector(mock_collector)
 
@@ -177,9 +174,7 @@ async def test_code_collector_input_types_and_edge_cases(
     mock_collector.collect_code.reset_mock()
     mock_collector.collect_code.return_value = project_root / "output.md"
     result = await tool_mock(["src/", "tests/"])
-    mock_collector.collect_code.assert_called_once_with(
-        ["src/", "tests/"], "Code Collection"
-    )
+    mock_collector.collect_code.assert_called_once_with(["src/", "tests/"])
     assert "Code collection complete!" in result
 
     # Test with empty list
@@ -197,34 +192,9 @@ async def test_code_collector_input_types_and_edge_cases(
     # Reset side_effect after error test
     mock_collector.collect_code.side_effect = None
 
-    # Test with very long title
+    # Test with special characters in path
     mock_collector.collect_code.reset_mock()
     mock_collector.collect_code.return_value = project_root / "output.md"
-    result = await tool_mock(
-        input_path="src/",
-        title="A" * 1000,  # Very long title
-    )
+    result = await tool_mock(input_path="src/!@#$%^&*()")
     assert "Code collection complete!" in result
-    mock_collector.collect_code.assert_called_once_with("src/", "A" * 1000)
-
-    # Test with special characters in title
-    mock_collector.collect_code.reset_mock()
-    mock_collector.collect_code.return_value = project_root / "output.md"
-    result = await tool_mock(
-        input_path="src/",
-        title="!@#$%^&*()",
-    )
-    assert "Code collection complete!" in result
-    mock_collector.collect_code.assert_called_once_with("src/", "!@#$%^&*()")
-
-    # Test with special characters in subproject_id
-    mock_collector.collect_code.reset_mock()
-    mock_collector.collect_code.return_value = project_root / "output.md"
-    result = await tool_mock(
-        input_path="src/",
-        subproject_id="!@#$%^&*()",
-    )
-    assert "Code collection complete!" in result
-    mock_collector.collect_code.assert_called_once_with(
-        "src/", "Code Collection"
-    )
+    mock_collector.collect_code.assert_called_once_with("src/!@#$%^&*()")

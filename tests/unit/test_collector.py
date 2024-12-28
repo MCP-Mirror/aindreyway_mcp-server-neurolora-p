@@ -8,7 +8,7 @@ from unittest.mock import create_autospec, patch
 
 import pytest
 
-from mcp_server_neurolorap.collector import CodeCollector, LanguageMap
+from mcpneurolora.tools.code_collector import CodeCollector, LanguageMap
 
 
 def test_language_map() -> None:

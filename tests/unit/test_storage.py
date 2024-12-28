@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from mcp_server_neurolorap.storage import StorageManager
+from mcpneurolora.storage import StorageManager
 
 
 @pytest.fixture

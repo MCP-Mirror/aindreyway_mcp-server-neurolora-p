@@ -6,7 +6,7 @@ For each issue, use this format:
 
 ### {number}. {Issue Title}
 
-**Type**: {SEVERITY emoji} {SEVERITY} | 🎯 PRIORITY: {level} | ⚡ EFFORT: {size}
+**Type**: {SEVERITY}: {SEVERITY emoji} | PRIORITY: {PRIORITY emoji} | EFFORT: {EFFORT emoji}
 
 **Problem**:
 
@@ -37,8 +37,18 @@ Severity levels:
 🔥 CRITICAL: Security/data risks, major performance issues
 ❌ ERROR: Bugs, memory leaks, incorrect logic
 🚨 WARNING: Maintainability issues, technical debt
-🔧 IMPROVE: Optimization opportunities, code simplification
+⚙️ IMPROVE: Optimization opportunities, code simplification
 🗑️ REMOVE: Redundant or unused code, unnecessary complexity
+
+Priority levels:
+🟢 Low
+🟡 Medium
+🔴 High
+
+Effort levels:
+🚶 Low
+🚴 Medium
+🏋️ High
 
 Review criteria:
 
@@ -108,9 +118,9 @@ except Exception as e:
 
 **Files to Check**:
 
-- src/mcp_server_neurolorap/collector.py
-- src/mcp_server_neurolorap/storage.py
-- src/mcp_server_neurolorap/server.py
+- src/collector.py
+- src/storage.py
+- src/server.py
 
 Example 2:
 
@@ -145,9 +155,9 @@ os.makedirs(path, exist_ok=True)
 
 **Files to Check**:
 
-- src/mcp_server_neurolorap/storage.py
-- src/mcp_server_neurolorap/collector.py
+- src/storage.py
+- src/collector.py
 
-## Code to analyze:
+## Code to improve:
 
 ---

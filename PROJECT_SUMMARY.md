@@ -1,4 +1,6 @@
-# MCP Server Neurolorap
+# NeuroLoRA MCP Server - Developer Documentation
+
+> **Note**: This document is intended for developers only. For user documentation, please see README.md.
 
 This MCP server follows best practices for Model Context Protocol server development:
 
@@ -9,7 +11,9 @@ This MCP server follows best practices for Model Context Protocol server develop
 
 ## Overview
 
-MCP server providing tools for code analysis and documentation:
+MCP server providing tools for code analysis and documentation. The server has two levels of functionality:
+
+### Base Tools (Always Available)
 
 1. Code Collection Tool:
 
@@ -20,293 +24,94 @@ MCP server providing tools for code analysis and documentation:
    - Customizable file ignore patterns
 
 2. Project Structure Reporter Tool:
+
    - Analyzes project structure and metrics
    - Generates detailed reports in markdown format
    - File size and complexity analysis
    - Recommendations for code organization
    - Tree-based visualization of project structure
 
-## Architecture
+### AI-Powered Tools (Requires Configuration)
 
-The project follows MCP server best practices with a clean, modular architecture:
+These tools are available only when AI model and API key are configured in Cline settings. Currently tested and supported only in Cline (not tested with Claude Desktop or other clients).
 
-```
-mcp-server-neurolorap/
-├── .venv/                     # Single virtual environment for development
-├── src/
-│   └── mcp_server_neurolorap/
-│       ├── __init__.py          # Package initialization
-│       ├── server.py            # MCP server implementation
-│       ├── collector.py         # Code collection logic
-│       ├── project_structure_reporter.py  # Structure analysis
-│       ├── terminal.py          # Developer mode JSON-RPC terminal
-│       ├── storage.py           # Storage management
-│       ├── types.py            # Type definitions
-│       ├── default.neuroloraignore  # Default ignore patterns
-│       └── py.typed             # Type hints marker
-├── tests/                     # Test directory
-│   ├── unit/                 # Unit tests
-│   │   ├── test_collector.py # Tests for collector.py
-│   │   ├── test_storage.py  # Tests for storage.py
-│   │   ├── test_server.py   # Tests for server.py
-│   │   └── test_terminal.py # Tests for terminal.py
-│   └── integration/         # Integration tests
-├── pyproject.toml            # Project configuration
-├── README.md                # User documentation
-├── .neuroloraignore        # Project ignore patterns
-├── pre-commit.py           # Pre-commit quality checks script with colored output
-└── LICENSE                  # MIT License
-```
+3. Find Improvements Tool:
 
-### Storage Structure
+   - Uses AI to analyze code and suggest improvements
+   - Supports multiple AI providers:
+     - OpenAI models:
+       - o1 (200k tokens)
+       - o1-preview (128k tokens)
+       - o1-preview-2024-09-12 (128k tokens)
+     - Gemini models:
+       - gemini-2.0-flash-exp (1M tokens)
+       - gemini-2.0-flash-thinking-exp-1219 (32k tokens)
+     - Anthropic models:
+       - claude-3-opus-20240229 (200k tokens)
+       - claude-3-sonnet-20240229 (200k tokens)
+       - claude-3-haiku-20240307 (200k tokens)
+   - Model-based provider selection
+   - Automatic token limit handling
+   - Adaptive progress tracking with smart ETA estimation
+   - Token count reporting for better resource management
+   - 5-minute timeout for AI operations
+   - Consistent file generation:
+     - CODE\_\*.md - collected source code
+     - IMPROVE*PROMPT*\*.md - analysis prompt
+     - IMPROVE*RESULT*\*.md - analysis result
 
-```
-~/.mcp-docs/                # Global storage directory
-└── <project-name>/         # Project-specific storage
-    ├── FULL_CODE_*.md      # Generated code collections
-    ├── PROJECT_STRUCTURE_*.md  # Structure reports
-    └── PROMPT_ANALYZE_*.md # Analysis prompts
+4. Code Request Tool:
+   - Process natural language requests for code changes
+   - Uses AI to generate detailed implementation plans
+   - Same provider and model support as Improvements Tool
+   - 5-minute timeout for AI operations
+   - Consistent file generation:
+     - CODE\_\*.md - collected source code
+     - REQUEST*PROMPT*\*.md - request prompt
+     - REQUEST*RESULT*\*.md - request result
 
-<project-root>/
-└── .neurolora -> ~/.mcp-docs/<project-name>/  # Symlink to storage
-```
+### Required Configuration for AI Tools
 
-### Development Environment
+To enable AI-powered tools, add the following to Cline settings:
 
-- Single `.venv` virtual environment for dependency isolation
-- `pyproject.toml` for modern Python packaging
-- Type hints throughout codebase
-- Standardized ignore patterns
-
-### Components
-
-1. **Server (server.py)**
-
-   - Implements MCP protocol using FastMCP with modern Python features
-   - Exposes code collection and structure analysis tools
-   - Uses dependency injection for required packages
-   - Handles request/response lifecycle with proper error handling
-   - Includes developer mode with JSON-RPC terminal interface
-
-2. **Terminal (terminal.py)**
-
-   - Implements JSON-RPC 2.0 protocol for developer mode
-   - Provides interactive command-line interface
-   - Supports extensible command system
-   - Includes built-in help and documentation
-
-3. **Collector (collector.py)**
-
-   - Core code collection functionality
-   - File traversal and filtering
-   - Markdown generation
-   - Language detection
-
-4. **Project Structure Reporter (project_structure_reporter.py)**
-
-   - Project structure analysis
-   - File metrics collection:
-     - Size analysis
-     - Line counting
-     - Token estimation
-   - Complexity assessment
-   - Report generation in markdown format
-   - Tree-based visualization
-   - Recommendations for code organization
-
-5. **Storage (storage.py)**
-
-   - Manages file storage and organization
-   - Creates and maintains .neurolora symlink in project root
-   - Handles file paths and project structure
-   - Ensures robust file system synchronization:
-     - Uses forced file synchronization (os.fsync)
-     - Implements global file system sync (os.sync)
-     - Updates modification times for directory chain
-     - Includes small delays for filesystem stability
-   - Manages .neuroloraignore patterns
-   - Provides comprehensive error handling and logging
-
-6. **Configuration**
-   - .neuroloraignore support
-   - Default ignore patterns
-   - Language mappings
-
-## Testing
-
-The project uses pytest for testing and includes comprehensive test coverage across multiple categories:
-
-### Test Structure
-
-```
-tests/
-├── unit/                 # Unit tests
-│   ├── test_collector.py # Tests for collector.py
-│   ├── test_storage.py  # Tests for storage.py
-│   ├── test_server.py   # Tests for server.py
-│   └── test_terminal.py # Tests for terminal.py
-└── integration/         # Integration tests
-```
-
-### Test Categories
-
-1. **Unit Tests**
-
-   - Test individual components in isolation
-   - Mock external dependencies
-   - Focus on edge cases and error handling
-   - Verify type annotations and interfaces
-   - Test each public method and class
-
-2. **Integration Tests**
-
-   - Test component interactions
-   - Verify file system operations
-   - Test JSON-RPC protocol compliance
-   - Validate MCP tool functionality
-   - Test error propagation between components
-
-3. **Performance Tests**
-
-   - Test system performance under load
-   - Measure file processing speed
-   - Monitor memory usage patterns
-   - Test concurrent operations
-   - Verify resource cleanup
-
-4. **Security Tests**
-   - Test input validation
-   - Verify file permissions
-   - Test path traversal prevention
-   - Check symlink handling
-   - Validate error messages
-
-### Test Infrastructure
-
-1. **Tools and Libraries**
-
-   - pytest for test framework
-   - pytest-asyncio for async tests
-   - pytest-cov for coverage reporting
-   - pytest-xdist for parallel execution
-   - pytest-timeout for test timeouts
-   - pytest-randomly for random ordering
-
-2. **CI/CD Integration**
-
-   - GitHub Actions workflow
-   - Automated test execution
-   - Coverage reporting
-   - Code quality checks
-   - Security scanning
-
-3. **Coverage Requirements**
-
-   - Minimum 80% code coverage (current: 83.65%)
-   - All public interfaces tested
-   - Error paths verified
-   - Edge cases covered
-   - Documentation examples tested
-
-4. **Current Coverage Status**
-
-   - **init**.py: 100% (fully covered)
-   - **main**.py: 96% (missing lines 109, 169)
-   - collector.py: 84% (meets minimum requirement)
-   - project_structure_reporter.py: 79% (needs improvement)
-   - server.py: 66% (needs improvement in lines 45-72, 81-110, 150->161, 158->161)
-   - storage.py: 80% (meets minimum requirement)
-   - terminal.py: 71% (needs improvement)
-   - types.py: 85% (meets minimum requirement)
-
-   Total coverage: 80.04% (meets minimum requirement of 80%)
-
-### Pre-commit Checks
-
-Before committing code to GitHub, run the pre-commit script to ensure all quality standards are met:
-
-```bash
-# Run all checks using the pre-commit script
-python pre-commit.py
-```
-
-The script will automatically run all necessary checks in sequence with beautiful colored output:
-
-This command will:
-
-1. Run all tests with coverage reporting
-2. Format code with black
-3. Sort imports with isort
-4. Check code style with flake8
-5. Verify type hints with mypy
-
-The command will fail if any of these checks fail:
-
-- Tests must pass with minimum 80% coverage
-- Code must be properly formatted (black)
-- Imports must be properly sorted (isort)
-- No style violations (flake8)
-- No type errors (mypy)
-
-Only commit and push code when all checks pass successfully. This ensures our CI/CD pipelines will always succeed.
-
-### Running Individual Checks
-
-For development, you can run individual checks:
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=mcp_server_neurolorap
-
-# Run specific categories
-pytest -m unit          # Unit tests
-pytest -m integration   # Integration tests
-pytest -m "not slow"    # Skip slow tests
-
-# Run in parallel
-pytest -n auto
-
-# Show test timing
-pytest --durations=10
-
-# Generate coverage report
-pytest --cov-report=html
-
-# Format code
-black .
-
-# Sort imports
-isort .
-
-# Check style
-flake8 .
-
-# Check types
-mypy src/mcp_server_neurolorap tests
+```json
+{
+  "mcpServers": {
+    "aindreyway-neurolora": {
+      "command": "uvx",
+      "args": ["mcp-server-neurolora"],
+      "env": {
+        "AI_MODEL": "o1-preview", // One of the supported models
+        "OPENAI_API_KEY": "your-api-key", // Required for OpenAI models
+        "GEMINI_API_KEY": "your-api-key", // Required for Gemini models
+        "ANTHROPIC_API_KEY": "your-api-key" // Required for Anthropic models
+      }
+    }
+  }
+}
 ```
 
 ## Developer Mode
 
-The server includes a developer mode with JSON-RPC terminal interface that allows direct interaction with the server's functionality. To use developer mode:
+The server includes a developer mode with JSON-RPC terminal interface:
 
 ```bash
-# Start the server in developer mode
-python -m mcp_server_neurolorap --dev
+# IMPORTANT: Always use virtual environment (.venv) for all commands
+.venv/bin/python -m mcpneurolora --dev
 
-# Available commands in the terminal:
-> help                    # Show available commands
-> list_tools             # List available MCP tools
-> collect <path>         # Collect code from specified path
-> report [path]          # Generate project structure report
-> exit                   # Exit developer mode
-```
+# DO NOT use system python directly:
+# ❌ python -m mcpneurolora
+# ✅ .venv/bin/python -m mcpneurolora
 
-Example session:
+# Available commands:
+> help                    # Show commands
+> list_tools             # List tools
+> collect <path>         # Collect code
+> report [path]          # Generate report
+> improve                # Analyze code
+> exit                   # Exit
 
-```
+# Example session:
 > help
 Available commands:
 - help: Show this help message
@@ -329,110 +134,365 @@ Project structure report generated: PROJECT_STRUCTURE_REPORT.md
 Goodbye!
 ```
 
-## Future Improvements
+## Architecture
 
-### Features
+The project follows MCP server best practices with a clean, modular architecture:
 
-1. Binary File Support
-
-   - Support for reading and processing binary files
-   - Safe binary file detection
-   - Binary file size limits
-   - Support for common binary formats (PDF, images, etc.)
-
-2. File Size Management
-
-   - Configurable file size limits
-   - Large file handling strategies
-   - File chunking for large files
-   - File size warnings and notifications
-
-3. Output Customization
-
-   - Multiple output formats (MD, HTML, PDF)
-   - Custom templates for output
-   - Syntax highlighting themes
-   - Table of contents customization
-   - Custom metadata fields
-
-4. Markup Support
-   - Support for AsciiDoc
-   - Support for reStructuredText
-   - Custom markup formats
-   - Markup conversion utilities
-
-### Performance
-
-1. Progress Reporting
-
-   - Real-time progress indicators
-   - ETA calculations
-   - Detailed progress statistics
-   - Progress callbacks
-
-2. Caching System
-
-   - Smart file caching
-   - Cache invalidation strategies
-   - Incremental updates
-   - Cache size management
-
-3. Parallel Processing
-   - Multi-threaded file processing
-   - Worker pool management
-   - Concurrent file access handling
-   - Distributed processing
-
-## Usage Examples
-
-### Code Collection
-
-```python
-# Collect code from entire project
-result = use_mcp_tool(
-    "code_collector",
-    {
-        "input": ".",
-        "title": "My Project"
-    }
-)
-
-# Collect code from specific directory
-result = use_mcp_tool(
-    "code_collector",
-    {
-        "input": "./src",
-        "title": "Source Code"
-    }
-)
-
-# Collect code from multiple paths
-result = use_mcp_tool(
-    "code_collector",
-    {
-        "input": ["./src", "./tests"],
-        "title": "Project Files"
-    }
-)
+```
+aindreyway-mcp-server-neurolora/
+├── .venv/                     # Single virtual environment for development
+├── mcp_server_neurolora/    # Source code directory
+│   ├── __init__.py           # Package initialization
+│   ├── server.py             # MCP server implementation
+│   ├── config.py             # Configuration management
+│   ├── terminal.py           # Developer mode JSON-RPC terminal
+│   ├── storage.py            # Storage management
+│   ├── types.py              # Type definitions
+│   ├── providers/            # AI provider implementations
+│   │   ├── __init__.py      # Provider factory and configuration
+│   │   ├── base_provider.py  # Base provider interface
+│   │   ├── openai_provider.py # OpenAI implementation
+│   │   ├── anthropic_provider.py # Anthropic implementation
+│   │   └── gemini_provider.py # Gemini implementation
+│   ├── tools/                # Tool implementations
+│   │   ├── __init__.py      # Tool initialization
+│   │   ├── collector.py      # Code collection tool
+│   │   ├── improver.py       # Code improvement tool
+│   │   ├── reporter.py       # Structure reporter tool
+│   │   └── executor.py       # Tool execution management
+│   ├── templates/            # Template files
+│   │   ├── ignore.template   # Default ignore patterns
+│   │   ├── todo.template.md  # TODO template
+│   │   └── done.template.md  # DONE template
+│   └── py.typed              # Type hints marker
+├── tests/                    # Test directory
+│   ├── unit/                # Unit tests
+│   │   ├── test_collector.py # Tests for collector.py
+│   │   ├── test_storage.py  # Tests for storage.py
+│   │   ├── test_server.py   # Tests for server.py
+│   │   └── test_terminal.py # Tests for terminal.py
+│   └── integration/         # Integration tests
+├── pyproject.toml           # Project configuration
+├── README.md               # User documentation
+├── .neuroloraignore       # Project ignore patterns
+├── pre-commit.py          # Pre-commit quality checks script
+└── LICENSE                # MIT License
 ```
 
-### Project Structure Analysis
+### Storage Structure
 
-```python
-# Generate project structure report
-result = use_mcp_tool(
-    "project_structure_reporter",
-    {
-        "output_filename": "PROJECT_STRUCTURE_REPORT.md"
-    }
-)
-
-# Analyze specific directory with custom ignore patterns
-result = use_mcp_tool(
-    "project_structure_reporter",
-    {
-        "output_filename": "src_structure.md",
-        "ignore_patterns": ["*.pyc", "__pycache__"]
-    }
-)
 ```
+~/.mcp-docs/                # Global storage directory
+└── <project-name>/         # Project-specific storage
+    └── PROJECT_STRUCTURE_*.md  # Structure reports
+
+<project-root>/
+└── .neurolora -> ~/.mcp-docs/<project-name>/  # Symlink to storage
+```
+
+### Configuration System
+
+The server uses a robust configuration management system:
+
+1. **Environment Management**
+
+   - Smart environment variable handling
+   - Preserves existing variables during reload
+   - Only sets new variables if not present
+   - Validates required variables
+   - Secure API key management
+   - Detailed logging of configuration changes
+
+2. **Required Configuration**
+
+   - AI_MODEL: Model name (e.g. "o1", "gemini-2.0-flash-exp")
+   - Provider-specific API keys:
+     - OPENAI_API_KEY for OpenAI models
+     - GEMINI_API_KEY for Gemini models
+     - ANTHROPIC_API_KEY for Anthropic models
+   - Project root path
+   - Storage directory location
+
+3. **Logging System**
+
+   - Configurable logging levels for all components
+   - Global logging configuration for MCP modules
+   - Component-specific log filtering
+   - Detailed operation logging
+   - Progress tracking in terminal mode
+   - Smart log filtering for cleaner output
+
+4. **File Configuration**
+   - .neuroloraignore support
+   - Default ignore patterns
+   - Language mappings
+   - Project-specific settings
+
+### AI Providers
+
+The server implements a flexible AI provider system:
+
+1. **Provider Architecture**
+
+   - Base provider interface
+   - Type-safe provider implementations
+   - Common message format
+   - Standardized error handling
+   - Token limit validation
+   - Response format validation
+   - Proper resource cleanup
+   - Efficient token counting
+
+2. **Supported Models**
+
+   - OpenAI models:
+     - o1: 200,000 tokens
+     - o1-preview-2024-09-12: 128,000 tokens
+   - Gemini models:
+     - gemini-2.0-flash-exp: 1,048,576 tokens
+     - gemini-2.0-flash-thinking-exp-1219: 32,767 tokens
+   - Anthropic models:
+     - claude-3-opus-20240229: 200,000 tokens
+     - claude-3-sonnet-20240229: 200,000 tokens
+     - claude-3-haiku-20240307: 200,000 tokens
+
+3. **Progress Tracking**
+
+   - Adaptive progress tracking
+   - Smart ETA estimation based on content size
+   - Real-time progress updates
+   - Accelerated progress in final stages
+   - Detailed timing information
+   - Token usage reporting
+
+4. **Provider Selection**
+   - Automatic provider selection based on model
+   - Token limit validation
+   - Model capability checking
+   - Fallback handling
+   - Error recovery
+
+### Prompts System
+
+The server implements a comprehensive prompts system using MCP prompts:
+
+1. **Prompt Structure**
+
+   - Markdown templates (.prompt.md files)
+   - Pydantic models for type safety
+   - Decorator-based registration (@mcp.prompt())
+   - URI-based access (prompts://)
+
+2. **Available Prompts**
+
+   - Command Help (prompts://commands/{command}/help):
+
+     - Get detailed help for specific commands
+     - Usage examples and parameters
+     - Command-specific tips
+
+   - Command Menu (prompts://commands/menu):
+
+     - List all available commands
+     - Command descriptions and previews
+     - Quick access to common actions
+
+   - Command Suggestions (prompts://commands/{command}/suggest):
+
+     - Context-aware next action suggestions
+     - Error recovery recommendations
+     - Success path guidance
+
+   - Command Routing (prompts://commands):
+     - Natural language command routing
+     - Pattern-based command matching
+     - Confidence scoring (0.0-1.0)
+     - Multilingual support:
+       - English commands (e.g., "collect code", "analyze code")
+       - Russian commands (e.g., "собери код", "собрать код")
+     - Command routing through FastMCP:
+       - Automatic routing in call_tool_wrapper
+       - High confidence threshold (>= 0.7)
+       - Detailed logging of routing decisions
+
+3. **Implementation**
+
+   - Prompts directory structure:
+
+     ```
+     prompts/
+     ├── __init__.py          # Prompt registration
+     ├── commands.py          # Pydantic models
+     └── commands.prompt.md   # Prompt templates
+     ```
+
+   - Type-safe prompt handling:
+
+     - Input/output validation
+     - Schema enforcement
+     - Error handling
+
+   - Standardized prompt format:
+     - Clear sections (Input, Example, Response)
+     - JSON schema definitions
+     - Markdown formatting
+
+4. **Usage**
+
+   - Through MCP resources:
+
+     ```python
+     content = await client.read_resource(
+         "local-aindreyway-neurolora",
+         "prompts://commands/improve/help"
+     )
+     ```
+
+   - Command routing:
+     - Natural language -> Command mapping
+     - Pattern matching using prompt templates
+     - Confidence-based selection
+
+### Components
+
+1. **Server (server.py)**
+
+   - Implements MCP protocol using FastMCP
+   - Exposes code collection and analysis tools
+   - Uses dependency injection
+   - Handles request/response lifecycle
+   - Includes developer mode with JSON-RPC terminal
+   - Unified logging through ToolExecutor
+
+2. **Tool Executor (tools/executor.py)**
+
+   - Central component for tool execution
+   - Unified interface for MCP and terminal
+   - Consistent logging and error reporting
+   - Tool lifecycle management
+   - Resource cleanup
+
+3. **Terminal (terminal.py)**
+
+   - JSON-RPC 2.0 protocol implementation
+   - Interactive command-line interface
+   - Extensible command system
+   - Built-in help and documentation
+   - Command history
+   - Tab completion
+
+4. **Tools**
+
+   - Collector (tools/collector.py):
+     - Code collection functionality
+     - File traversal and filtering
+     - Markdown generation
+     - Language detection
+   - Improver (tools/improver.py):
+     - Code analysis and improvement
+     - AI provider integration
+     - Progress tracking
+     - Result formatting
+   - Reporter (tools/reporter.py):
+     - Project structure analysis
+     - Metrics collection
+     - Report generation
+     - Recommendations
+
+5. **Storage (storage.py)**
+   - File storage management
+   - .neurolora symlink handling
+   - File path management
+   - File system synchronization
+   - Pattern-based file matching
+
+## Testing
+
+The project uses pytest for comprehensive testing:
+
+### Test Structure
+
+```
+tests/
+├── unit/                 # Unit tests
+│   ├── test_collector.py # Tests for collector.py
+│   ├── test_storage.py  # Tests for storage.py
+│   ├── test_server.py   # Tests for server.py
+│   └── test_terminal.py # Tests for terminal.py
+└── integration/         # Integration tests
+```
+
+### Test Categories
+
+1. **Unit Tests**
+
+   - Component isolation testing
+   - Mock external dependencies
+   - Edge case coverage
+   - Type annotation verification
+   - Public interface testing
+
+2. **Integration Tests**
+
+   - Component interaction testing
+   - File system operation verification
+   - JSON-RPC protocol validation
+   - MCP tool functionality testing
+   - Error propagation verification
+
+3. **Performance Tests**
+
+   - Load testing
+   - File processing speed
+   - Memory usage monitoring
+   - Concurrent operation testing
+   - Resource cleanup verification
+
+4. **Security Tests**
+   - Input validation
+   - File permission verification
+   - Path traversal prevention
+   - Symlink handling
+   - Error message validation
+
+### Test Infrastructure
+
+1. **Tools and Libraries**
+
+   - pytest framework
+   - pytest-asyncio
+   - pytest-cov
+   - pytest-xdist
+   - pytest-timeout
+   - pytest-randomly
+
+2. **CI/CD Integration**
+
+   - GitHub Actions workflow
+   - Automated testing
+   - Coverage reporting
+   - Code quality checks
+   - Security scanning
+
+3. **Coverage Requirements**
+   - 80% minimum coverage
+   - Public interface testing
+   - Error path verification
+   - Edge case coverage
+   - Documentation testing
+
+### Pre-commit Checks
+
+Run pre-commit script for quality checks:
+
+```bash
+python pre-commit.py
+```
+
+Checks include:
+
+1. Test execution with coverage
+2. Code formatting (black)
+3. Import sorting (isort)
+4. Style checking (flake8)
+5. Type checking (mypy)

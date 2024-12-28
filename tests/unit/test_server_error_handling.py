@@ -7,11 +7,10 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-from mcp_server_neurolorap.server import run_dev_mode
+from mcpneurolora.server import run_terminal_server
 
 # Disable logging for tests
-logging.getLogger("mcp_server_neurolorap.server").setLevel(logging.CRITICAL)
+logging.getLogger("mcpneurolora.server").setLevel(logging.CRITICAL)
 
 
 class MockTerminal:
@@ -80,9 +79,9 @@ class ToolMock(AsyncMock):
 @pytest.fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolorap.server.FastMCP") as mock:
+    with patch("mcpneurolora.server.FastMCP") as mock:
         mock_server = MagicMock()
-        mock_server.name = "neurolorap"
+        mock_server.name = "neurolora"
         mock_server.tools = {
             "project_structure_reporter": ToolMock(),
             "code_collector": ToolMock(),
@@ -94,7 +93,9 @@ def mock_fastmcp() -> Generator[MagicMock, None, None]:
 
 @pytest.mark.asyncio
 async def test_project_structure_reporter_error_handling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test error handling in project_structure_reporter tool."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", str(tmp_path))
@@ -130,7 +131,9 @@ async def test_project_structure_reporter_error_handling(
 
 @pytest.mark.asyncio
 async def test_code_collector_error_handling(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mock_fastmcp: MagicMock
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mock_fastmcp: MagicMock,
 ) -> None:
     """Test error handling in code_collector tool."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", str(tmp_path))
@@ -165,10 +168,10 @@ async def test_code_collector_error_handling(
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_value_error(
+async def test_terminal_server_value_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test error handling in run_dev_mode."""
+    """Test error handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock print function to capture output
@@ -183,19 +186,19 @@ async def test_run_dev_mode_value_error(
     input_mock = MagicMock(side_effect=[ValueError("Invalid input"), "exit"])
     monkeypatch.setattr("builtins.input", input_mock)
 
-    # Run dev mode
-    await run_dev_mode()
+    # Run terminal server
+    await run_terminal_server()
 
     # Verify error handling
     assert any("Value error: Invalid input" in msg for msg in prints)
-    assert any("Exiting developer mode" in msg for msg in prints)
+    assert any("Exiting terminal server" in msg for msg in prints)
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_type_error(
+async def test_terminal_server_type_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test type error handling in run_dev_mode."""
+    """Test type error handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock print function to capture output
@@ -210,19 +213,19 @@ async def test_run_dev_mode_type_error(
     input_mock = MagicMock(side_effect=[TypeError("Invalid type"), "exit"])
     monkeypatch.setattr("builtins.input", input_mock)
 
-    # Run dev mode
-    await run_dev_mode()
+    # Run terminal server
+    await run_terminal_server()
 
     # Verify error handling
     assert any("Type error: Invalid type" in msg for msg in prints)
-    assert any("Exiting developer mode" in msg for msg in prints)
+    assert any("Exiting terminal server" in msg for msg in prints)
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_empty_input(
+async def test_terminal_server_empty_input(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test empty input handling in run_dev_mode."""
+    """Test empty input handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock print function to capture output
@@ -237,19 +240,19 @@ async def test_run_dev_mode_empty_input(
     input_mock = MagicMock(side_effect=["", "exit"])
     monkeypatch.setattr("builtins.input", input_mock)
 
-    # Run dev mode
-    await run_dev_mode()
+    # Run terminal server
+    await run_terminal_server()
 
     # Verify error handling
     assert not any("Invalid command format" in msg for msg in prints)
-    assert any("Exiting developer mode" in msg for msg in prints)
+    assert any("Exiting terminal server" in msg for msg in prints)
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_invalid_command(
+async def test_terminal_server_invalid_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test invalid command format handling in run_dev_mode."""
+    """Test invalid command format handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock print function to capture output
@@ -263,31 +266,31 @@ async def test_run_dev_mode_invalid_command(
     # Mock terminal to return None for parse_request
     terminal = MockTerminal()
     with patch(
-        "mcp_server_neurolorap.server.JsonRpcTerminal",
+        "mcpneurolora.server.JsonRpcTerminal",
         return_value=terminal,
     ):
         # Mock input with invalid command then exit
         input_mock = MagicMock(side_effect=["invalid command", "exit"])
         monkeypatch.setattr("builtins.input", input_mock)
 
-        # Run dev mode
-        await run_dev_mode()
+        # Run terminal server
+        await run_terminal_server()
 
         # Verify error handling
         assert any("Invalid command format" in msg for msg in prints)
-        assert any("Exiting developer mode" in msg for msg in prints)
+        assert any("Exiting terminal server" in msg for msg in prints)
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_unknown_command(
+async def test_terminal_server_unknown_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test unknown command handling in run_dev_mode."""
+    """Test unknown command handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock JsonRpcTerminal class
     with patch(
-        "mcp_server_neurolorap.server.JsonRpcTerminal"
+        "mcpneurolora.server.JsonRpcTerminal"
     ) as mock_terminal_class:
         terminal_instance = MockTerminal()
         mock_terminal_class.return_value = terminal_instance
@@ -304,23 +307,23 @@ async def test_run_dev_mode_unknown_command(
 
         monkeypatch.setattr("builtins.print", print_mock)
 
-        # Run dev mode
-        await run_dev_mode()
+        # Run terminal server
+        await run_terminal_server()
 
         # Verify error handling
         error_msg = "Error: Method 'unknown_command' not found"
         has_error = any(error_msg in msg for msg in prints)
-        has_exit = any("Exiting developer mode" in msg for msg in prints)
+        has_exit = any("Exiting terminal server" in msg for msg in prints)
 
         assert has_error, f"Expected '{error_msg}' in output"
-        assert has_exit, "Expected 'Exiting developer mode' message"
+        assert has_exit, "Expected 'Exiting terminal server' message"
 
 
 @pytest.mark.asyncio
-async def test_run_dev_mode_keyboard_interrupt(
+async def test_terminal_server_keyboard_interrupt(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Test keyboard interrupt handling in run_dev_mode."""
+    """Test keyboard interrupt handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock input function to raise KeyboardInterrupt
@@ -335,8 +338,8 @@ async def test_run_dev_mode_keyboard_interrupt(
 
     monkeypatch.setattr("builtins.print", print_mock)
 
-    # Run dev mode
-    await run_dev_mode()
+    # Run terminal server
+    await run_terminal_server()
 
     # Verify error handling
-    assert any("Exiting developer mode" in msg for msg in prints)
+    assert any("Exiting terminal server" in msg for msg in prints)

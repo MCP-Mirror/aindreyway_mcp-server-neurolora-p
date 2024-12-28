@@ -9,7 +9,7 @@ node_modules/
 .venv/
 venv/
 
-# Neurolora
+# NeuroLoRA
 .neurolora/
 .neurolora_*/
 
@@ -69,11 +69,8 @@ docs/_build/
 *.generated.*
 *copy.*
 
-# Neurolora files and symlinks
+# NeuroLoRA files and symlinks
 .neurolora/
 .neurolora_*/
-FULL_CODE_*.md
-PROMPT_ANALYZE_*.md
-LAST_RESPONSE*
 PROJECT_STRUCTURE*
 .clinerules

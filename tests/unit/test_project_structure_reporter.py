@@ -6,7 +6,7 @@ from typing import Generator
 
 import pytest
 
-from mcp_server_neurolorap.project_structure_reporter import (
+from mcpneurolora.tools.project_structure_reporter import (
     ProjectStructureReporter,
 )
 

@@ -5,7 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import List, NamedTuple, Tuple
+from typing import List
 
 
 def get_python_path() -> str:
@@ -25,99 +25,74 @@ def get_python_path() -> str:
     return "python"  # fallback to system python if venv not found
 
 
-class Check(NamedTuple):
-    """Represents a pre-commit check with its command and description."""
-
-    command: List[str]
-    description: str
-
-
-def run_command(command: List[str], description: str) -> Tuple[bool, str]:
-    """Run a command and return success status and output."""
+def run_command(command: List[str], description: str) -> bool:
+    """Run a command and return success status."""
     print(f"\n{description}...")
     try:
-        # Run with direct output to terminal
         result = subprocess.run(
             command,
-            check=False,  # Don't raise exception on non-zero exit
+            check=False,
             env={
                 **os.environ,
-                "FORCE_COLOR": "1",  # Force colored output
+                "FORCE_COLOR": "1",
                 "PY_COLORS": "1",
                 "MYPY_FORCE_COLOR": "1",
                 "PYTEST_FORCE_COLOR": "1",
             },
         )
-        return result.returncode == 0, ""
+        return result.returncode == 0
     except Exception as e:
-        return False, f"Failed to run command: {e}"
+        print(f"Failed to run command: {e}")
+        return False
 
 
 def main() -> int:
     """Run all pre-commit checks."""
     python_path = get_python_path()
-    checks: List[Check] = [
-        Check(
-            command=[
+
+    # Define checks as tuples of (description, command)
+    checks = [
+        (
+            "Running tests with coverage",
+            [
                 python_path,
                 "-m",
                 "pytest",
                 "-v",
-                "--cov=mcp_server_neurolorap",
+                "--cov=mcp_server_neurolora",
                 "--cov-report=term-missing",
             ],
-            description="Running tests with coverage",
         ),
-        Check(
-            command=[python_path, "-m", "black", "."],
-            description="Formatting code with black",
+        ("Formatting code with black", [python_path, "-m", "black", "."]),
+        ("Sorting imports with isort", [python_path, "-m", "isort", "."]),
+        (
+            "Checking code style with flake8",
+            [python_path, "-m", "flake8", "."],
         ),
-        Check(
-            command=[python_path, "-m", "isort", "."],
-            description="Sorting imports with isort",
-        ),
-        Check(
-            command=[python_path, "-m", "flake8", "."],
-            description="Checking code style with flake8",
-        ),
-        Check(
-            command=[
-                python_path,
-                "-m",
-                "mypy",
-                "src/mcp_server_neurolorap",
-                "tests",
-            ],
-            description="Checking types with mypy",
+        (
+            "Checking types with mypy",
+            [python_path, "-m", "mypy", "src/mcp_server_neurolora", "tests"],
         ),
     ]
 
-    failed_checks: List[Tuple[str, str]] = []
-    any_formatted: bool = False
+    formatting_tools = {
+        "Formatting code with black",
+        "Sorting imports with isort",
+    }
+    failed_checks: List[str] = []
 
-    for check in checks:
-        success, error = run_command(check.command, check.description)
-        if not success:
-            if check.description in [
-                "Formatting code with black",
-                "Sorting imports with isort",
-            ]:
-                # Tools like black return 1 if they modified files
-                any_formatted = True
-            else:
-                failed_checks.append((check.description, error))
-
-    if any_formatted:
-        print("\n⚠️  Some files were reformatted.")
-        print("Please review and stage the changes.")
-        return 1
+    for description, command in checks:
+        if not run_command(command, description):
+            if description in formatting_tools:
+                print("\n⚠️  Files were reformatted.")
+                print("Please review and stage changes.")
+                return 1
+            failed_checks.append(description)
 
     if failed_checks:
-        print("\n❌ Some checks failed:")
-        for description, error in failed_checks:
-            if error:  # Only print if there's an error message
-                print(f"\n{description}:")
-                print(error)
+        print("\n❌ Failed checks:")
+        for check in failed_checks:
+            print(f"- {check}")
         return 1
 
     print("\n✨ All checks passed successfully! ✨")

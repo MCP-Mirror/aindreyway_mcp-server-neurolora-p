@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from mcp_server_neurolorap.terminal import JsonRpcTerminal
+from mcpneurolora.terminal import JsonRpcTerminal
 
 # Type aliases for JSON-RPC structures
 JsonRpcRequest = Dict[str, Any]
@@ -29,7 +29,7 @@ def terminal_with_root(project_root: Path) -> JsonRpcTerminal:
 def test_init_basic(terminal: JsonRpcTerminal) -> None:
     """Test basic initialization of JsonRpcTerminal."""
     assert terminal.project_root is None
-    assert terminal.collector is not None
+    assert terminal.executor is not None
     assert set(terminal.commands.keys()) == {
         "help",
         "list_tools",
@@ -48,11 +48,11 @@ def test_init_with_project_root(
     assert isinstance(terminal_with_root.project_root, Path)
     assert terminal_with_root.project_root.resolve() == project_root.resolve()
 
-    # Check that collector is initialized with correct project_root
-    assert terminal_with_root.collector is not None
-    collector_root = terminal_with_root.collector.project_root
-    assert isinstance(collector_root, Path)
-    assert collector_root.resolve() == project_root.resolve()
+    # Check that executor is initialized with correct project_root
+    assert terminal_with_root.executor is not None
+    executor_root = terminal_with_root.executor.project_root
+    assert isinstance(executor_root, Path)
+    assert executor_root.resolve() == project_root.resolve()
 
 
 @pytest.mark.parametrize(
@@ -165,8 +165,9 @@ async def test_cmd_list_tools(terminal: JsonRpcTerminal) -> None:
 @pytest.mark.asyncio
 async def test_cmd_collect_no_params(terminal: JsonRpcTerminal) -> None:
     """Test collect command without parameters."""
-    with pytest.raises(ValueError, match="Path parameter required"):
-        await terminal.cmd_collect([])
+    result = await terminal.cmd_collect([])
+    assert isinstance(result, dict)
+    assert "result" in result
 
 
 @pytest.mark.parametrize(
@@ -307,15 +308,16 @@ async def test_cmd_collect_with_subproject(
 
 
 @pytest.mark.asyncio
-async def test_cmd_collect_invalid_collector_creation(
+async def test_cmd_collect_invalid_executor_creation(
     terminal: JsonRpcTerminal,
 ) -> None:
-    """Test error handling when CodeCollector creation fails."""
+    """Test error handling when ToolExecutor creation fails."""
     # Create a terminal with an invalid project root
     invalid_terminal = JsonRpcTerminal(project_root="/nonexistent/path")
 
-    with pytest.raises(ValueError):
-        await invalid_terminal.cmd_collect(["some/path"])
+    result = await invalid_terminal.cmd_collect(["some/path"])
+    assert isinstance(result, dict)
+    assert "No files found to process or error occurred" in result["result"]
 
 
 @pytest.mark.asyncio

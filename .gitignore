@@ -24,6 +24,7 @@ wheels/
 .coverage
 coverage.xml
 coverage_html/
+config.json
 
 # IDE
 .idea/
@@ -49,3 +50,8 @@ LAST_RESPONSE_*.json
 .neurolora/
 .neurolora
 .neuroloraignore
+
+# Temporary
+createbranchcommand.md
+dotodo.prompt.md
+improve.prompt2.md

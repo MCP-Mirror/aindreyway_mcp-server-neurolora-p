@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, NonCallableMock, patch
 
 import pytest
 
-from mcp_server_neurolorap.server import create_server, get_project_root
+from mcpneurolora.server import get_project_root, run_mcp_server
 
 
 class ToolMock(AsyncMock):
@@ -77,7 +77,7 @@ class MockFastMCP:
         def decorator(func: Any) -> Any:
             self.tool_called = True
             self.debug("Registering tool: code_collector")
-            self.info("Starting MCP server: neurolorap")
+            self.info("Starting MCP server: neurolora")
             return self.tools["code_collector"]
 
         return decorator
@@ -90,8 +90,8 @@ class MockFastMCP:
 @pytest.fixture
 def mock_fastmcp() -> Generator[MockFastMCP, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolorap.server.FastMCP") as mock:
-        mock_server = MockFastMCP("neurolorap")
+    with patch("mcp_server_neurolora.server.FastMCP") as mock:
+        mock_server = MockFastMCP("neurolora")
         mock.return_value = mock_server
         yield mock_server
 
@@ -99,14 +99,14 @@ def mock_fastmcp() -> Generator[MockFastMCP, None, None]:
 @pytest.fixture
 def mock_logger() -> Generator[MagicMock, None, None]:
     """Mock logger."""
-    with patch("mcp_server_neurolorap.server.logger") as mock_logger:
+    with patch("mcp_server_neurolora.server.logger") as mock_logger:
         yield mock_logger
 
 
-def test_create_server(mock_fastmcp: MockFastMCP) -> None:
-    """Test server creation and configuration."""
-    server = create_server()
-    assert server.name == "neurolorap"
+def test_run_mcp_server(mock_fastmcp: MockFastMCP) -> None:
+    """Test MCP server initialization and configuration."""
+    server = run_mcp_server()
+    assert server.name == "neurolora"
     assert server.tool_called
     assert "code_collector" in server.tools
 
@@ -132,29 +132,29 @@ def test_project_root_environment(mock_logger: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_server_initialization(mock_fastmcp: MockFastMCP) -> None:
-    """Test server initialization process."""
-    server = create_server()
-    assert server.name == "neurolorap"
-    mock_fastmcp.info.assert_called_with("Starting MCP server: neurolorap")
+async def test_mcp_server_initialization(mock_fastmcp: MockFastMCP) -> None:
+    """Test MCP server initialization process."""
+    server = run_mcp_server()
+    assert server.name == "neurolora"
+    mock_fastmcp.info.assert_called_with("Starting MCP server: neurolora")
 
 
 @pytest.mark.asyncio
-async def test_server_tool_registration(mock_fastmcp: MockFastMCP) -> None:
-    """Test tool registration process."""
-    server = create_server()
+async def test_mcp_server_tool_registration(mock_fastmcp: MockFastMCP) -> None:
+    """Test MCP server tool registration process."""
+    server = run_mcp_server()
     assert "code_collector" in server.tools
     mock_fastmcp.debug.assert_any_call("Registering tool: code_collector")
 
 
 @pytest.mark.asyncio
-async def test_server_error_handling(mock_fastmcp: MockFastMCP) -> None:
-    """Test server error handling."""
+async def test_mcp_server_error_handling(mock_fastmcp: MockFastMCP) -> None:
+    """Test MCP server error handling."""
     # Test initialization error
     test_error = Exception("Test error")
     mock_fastmcp.set_tool_error(test_error)
     with pytest.raises(Exception) as exc_info:
-        create_server()
+        run_mcp_server()
     assert str(exc_info.value) == "Test error"
     mock_fastmcp.error.assert_called_with(
         "Failed to initialize server: Test error", exc_info=True

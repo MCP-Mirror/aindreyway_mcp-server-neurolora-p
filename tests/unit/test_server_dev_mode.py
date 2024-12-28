@@ -1,17 +1,17 @@
-"""Unit tests for developer mode functionality."""
+"""Unit tests for terminal server functionality."""
 
 from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from mcp_server_neurolorap.server import run_dev_mode
+from mcpneurolora.server import run_terminal_server
 
 
 @pytest.fixture
 def mock_terminal_fixture() -> Generator[MagicMock, None, None]:
     """Mock terminal fixture."""
-    with patch("mcp_server_neurolorap.server.JsonRpcTerminal") as mock_class:
+    with patch("mcpneurolora.server.JsonRpcTerminal") as mock_class:
         mock_instance = MagicMock()
         mock_instance.parse_request = MagicMock()
         mock_instance.handle_command = AsyncMock()
@@ -20,8 +20,10 @@ def mock_terminal_fixture() -> Generator[MagicMock, None, None]:
 
 
 @pytest.mark.asyncio
-async def test_dev_mode_commands(mock_terminal_fixture: MagicMock) -> None:
-    """Test developer mode command handling."""
+async def test_terminal_server_commands(
+    mock_terminal_fixture: MagicMock,
+) -> None:
+    """Test terminal server command handling."""
     # Setup mock terminal responses
     mock_terminal_fixture.parse_request.side_effect = [
         {
@@ -52,7 +54,7 @@ async def test_dev_mode_commands(mock_terminal_fixture: MagicMock) -> None:
     with patch("builtins.input", side_effect=["help", "exit"]), patch(
         "builtins.print"
     ) as mock_print:
-        await run_dev_mode()
+        await run_terminal_server()
 
         # Verify output
         mock_print.assert_any_call("Help message")
@@ -60,10 +62,10 @@ async def test_dev_mode_commands(mock_terminal_fixture: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dev_mode_error_handling(
+async def test_terminal_server_error_handling(
     mock_terminal_fixture: MagicMock,
 ) -> None:
-    """Test error handling in developer mode."""
+    """Test error handling in terminal server."""
     error_cases: list[tuple[type[Exception], str]] = [
         (ValueError, "Value error: Invalid command"),
         (TypeError, "Type error: Type error"),
@@ -87,14 +89,16 @@ async def test_dev_mode_error_handling(
         with patch("builtins.input", side_effect=["invalid", "exit"]), patch(
             "builtins.print"
         ) as mock_print:
-            await run_dev_mode()
+            await run_terminal_server()
             expected_error = expected_msg.split(":")[0]
             mock_print.assert_any_call(f"{expected_error}: Invalid command")
 
 
 @pytest.mark.asyncio
-async def test_dev_mode_empty_input(mock_terminal_fixture: MagicMock) -> None:
-    """Test empty input handling in developer mode."""
+async def test_terminal_server_empty_input(
+    mock_terminal_fixture: MagicMock,
+) -> None:
+    """Test empty input handling in terminal server."""
     mock_terminal_fixture.parse_request.side_effect = [
         {"jsonrpc": "2.0", "method": "exit", "id": 1},
     ]
@@ -105,24 +109,26 @@ async def test_dev_mode_empty_input(mock_terminal_fixture: MagicMock) -> None:
     with patch("builtins.input", side_effect=["", "exit"]), patch(
         "builtins.print"
     ) as mock_print:
-        await run_dev_mode()
+        await run_terminal_server()
         # Verify that no error was printed for empty input
         assert mock_print.call_count == 5
 
 
 @pytest.mark.asyncio
-async def test_dev_mode_interrupts(mock_terminal_fixture: MagicMock) -> None:
-    """Test interrupt handling in developer mode."""
+async def test_terminal_server_interrupts(
+    mock_terminal_fixture: MagicMock,
+) -> None:
+    """Test interrupt handling in terminal server."""
     # Test KeyboardInterrupt
     with patch("builtins.input", side_effect=KeyboardInterrupt), patch(
         "builtins.print"
     ) as mock_print:
-        await run_dev_mode()
-        mock_print.assert_called_with("\nExiting developer mode")
+        await run_terminal_server()
+        mock_print.assert_called_with("\nExiting terminal server")
 
     # Test EOFError
     with patch("builtins.input", side_effect=EOFError), patch(
         "builtins.print"
     ) as mock_print:
-        await run_dev_mode()
-        mock_print.assert_called_with("\nExiting developer mode")
+        await run_terminal_server()
+        mock_print.assert_called_with("\nExiting terminal server")
