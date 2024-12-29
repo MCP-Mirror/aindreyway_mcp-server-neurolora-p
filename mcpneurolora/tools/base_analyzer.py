@@ -2,12 +2,14 @@
 
 import logging
 import os
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from ..file_naming import FileType, format_filename
 from ..storage import StorageManager
 from ..types import Context
+from ..utils import async_io
 from .collector import Collector
 
 # Get module logger
@@ -74,7 +76,7 @@ class BaseAnalyzer:
                 self.context.info("Starting code collection...")
 
             # First collect all code
-            code_file = self.collector.collect_code(input_paths)
+            code_file = await self.collector.collect_code(input_paths)
             if not code_file:
                 logger.error("Failed to collect code")
                 return None
@@ -84,7 +86,7 @@ class BaseAnalyzer:
                 await self.context.report_progress(25, 100)
 
             # Read the collected code
-            code_content = self.collector.read_file_content(code_file)
+            code_content = await async_io.read_file(code_file)
 
             if self.context:
                 self.context.info("Getting analysis prompt...")
@@ -96,7 +98,7 @@ class BaseAnalyzer:
                 / "prompts"
                 / f"{prompt_name}.prompt.md"
             )
-            prompt_content = self.collector.read_file_content(prompt_path)
+            prompt_content = await async_io.read_file(prompt_path)
 
             # Combine prompt and code
             full_prompt = (
@@ -122,8 +124,6 @@ class BaseAnalyzer:
                 return None
 
             # Use same timestamp for all files
-            from datetime import datetime
-
             timestamp = datetime.now()
 
             # Create output paths with same timestamp
@@ -137,9 +137,7 @@ class BaseAnalyzer:
             )
 
             # Save collected code
-            with open(code_output_path, "w", encoding="utf-8") as f:
-                f.write(code_content)
-                f.flush()
+            await async_io.write_file(code_output_path, code_content)
 
             # Save prompt based on command
             prompt_type = (
@@ -155,9 +153,7 @@ class BaseAnalyzer:
                     provider=self.provider.name,
                 )
             )
-            with open(prompt_output_path, "w", encoding="utf-8") as f:
-                f.write(full_prompt)
-                f.flush()
+            await async_io.write_file(prompt_output_path, full_prompt)
 
             # Write analysis result only for improve and request commands
             if output_type in [
@@ -172,14 +168,17 @@ class BaseAnalyzer:
                         provider=self.provider.name,
                     )
                 )
-                with open(result_output_path, "w", encoding="utf-8") as f:
-                    f.write(f"# {title}\n\n")
-                    if extra_content:
-                        f.write(f"{extra_content}\n\n")
-                    f.write(f"Analysis of code from: {input_paths}\n")
-                    f.write(f"Model: {os.getenv('AI_MODEL', 'o1')}\n\n")
-                    f.write(analysis)
-                    f.flush()
+                result_content = [
+                    f"# {title}\n\n",
+                    f"{extra_content}\n\n" if extra_content else "",
+                    f"Analysis of code from: {input_paths}\n",
+                    f"Model: {os.getenv('AI_MODEL', 'o1')}\n\n",
+                    analysis,
+                ]
+                await async_io.write_file(
+                    result_output_path, "".join(result_content)
+                )
+
                 if self.context:
                     self.context.info("Analysis complete!")
                     await self.context.report_progress(100, 100)

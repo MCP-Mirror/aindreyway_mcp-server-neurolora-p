@@ -3,10 +3,14 @@
 import asyncio
 import logging
 import sys
-import time
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+def get_time() -> float:
+    """Get current time using running event loop."""
+    return asyncio.get_running_loop().time()
 
 
 class ProgressTracker:
@@ -60,7 +64,7 @@ class ProgressTracker:
 
     async def start(self) -> None:
         """Start progress tracking."""
-        self.start_time = time.time()
+        self.start_time = get_time()
         self.current_step = 0
         self.is_running = True
         if self.use_spinner:
@@ -75,13 +79,20 @@ class ProgressTracker:
         """
         self.is_running = False
         if self.start_time is not None:
-            duration = time.time() - self.start_time
+            duration = get_time() - self.start_time
             if self.use_spinner:
-                sys.stdout.write("\r" + " " * 80 + "\r")  # Clear line
-                sys.stdout.write(
-                    f"{self.prefix} {message} ({duration:.1f}s)\n"
+                loop = asyncio.get_running_loop()
+                # Clear line and write final message
+                await loop.run_in_executor(
+                    None,
+                    lambda: (
+                        sys.stdout.write("\r" + " " * 80 + "\r"),
+                        sys.stdout.write(
+                            f"{self.prefix} {message} ({duration:.1f}s)\n"
+                        ),
+                        sys.stdout.flush(),
+                    ),
                 )
-                sys.stdout.flush()
             else:
                 await self._log_progress(
                     f"{message} in {duration:.1f}s",
@@ -99,13 +110,13 @@ class ProgressTracker:
         if not self.is_running:
             return
 
-        now = time.time()
+        now = get_time()
         self.current_step = min(step, self.total_steps)
 
         # Only update if enough time has passed
         if (now - self._last_update) >= self._update_interval:
             if self.use_spinner:
-                self._update_display(message)
+                await self._update_display(message)
             else:
                 await self._log_progress(self._format_progress(message))
             self._last_update = now
@@ -125,7 +136,7 @@ class ProgressTracker:
         Returns:
             Formatted progress string
         """
-        now = time.time()
+        now = get_time()
         progress = min(self.current_step / self.total_steps, 1.0)
         percent = int(progress * 100)
 
@@ -187,10 +198,10 @@ class ProgressTracker:
     async def _update_loop(self) -> None:
         """Continuously update progress display."""
         while self.is_running:
-            self._update_display()
+            await self._update_display()
             await asyncio.sleep(0.1)  # Update every 100ms
 
-    def _update_display(self, message: str = "") -> None:
+    async def _update_display(self, message: str = "") -> None:
         """Update progress display with spinner animation.
 
         Args:
@@ -206,9 +217,15 @@ class ProgressTracker:
         # Format progress message
         progress_msg = self._format_progress(message)
 
-        # Write to stdout with spinner
-        sys.stdout.write(f"\r{spinner} {progress_msg}")
-        sys.stdout.flush()
+        # Write to stdout with spinner using executor
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(
+            None,
+            lambda: (
+                sys.stdout.write(f"\r{spinner} {progress_msg}"),
+                sys.stdout.flush(),
+            ),
+        )
 
     async def _log_progress(
         self, message: str = "", force: bool = False
@@ -219,8 +236,8 @@ class ProgressTracker:
             message: Progress message to log
             force: Force update even if interval hasn't elapsed
         """
-        if force or (time.time() - self._last_update) >= self._update_interval:
+        if force or (get_time() - self._last_update) >= self._update_interval:
             logger.info(message)
-            self._last_update = time.time()
+            self._last_update = get_time()
             # Small delay to allow other tasks to run
             await asyncio.sleep(0)

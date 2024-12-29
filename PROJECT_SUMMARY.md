@@ -93,6 +93,15 @@ To enable AI-powered tools, add the following to Cline settings:
 
 ## Developer Mode
 
+⚠️ **IMPORTANT: Server Restart Required**
+
+After making any changes to MCP commands, tools, or server code, you MUST restart the server for changes to take effect. This is critical because:
+
+- MCP tools are loaded only once during server startup
+- Changes to code won't be reflected until server restart
+- Running server continues using old code even after modifications
+- Missing this step can lead to confusing debugging sessions
+
 The server includes a developer mode with JSON-RPC terminal interface:
 
 ```bash

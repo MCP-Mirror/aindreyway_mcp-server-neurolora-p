@@ -1,14 +1,15 @@
 """Project structure analysis and reporting."""
 
+import asyncio
 import fnmatch
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, TextIO, TypedDict, cast
+from typing import List, Optional, TypedDict, cast, Callable
 
 from ..file_naming import FileType, format_filename, get_file_pattern
 from ..storage import StorageManager
 from ..log_utils import get_logger, LogCategory
+from ..utils import async_io
 
 # Get module logger
 logger = get_logger(__name__, LogCategory.TOOLS)
@@ -58,13 +59,12 @@ class Reporter:
         self.storage = StorageManager(root_dir)
         self.storage.setup()
 
-        # Load ignore patterns from .neuroloraignore and combine with provided
-        # patterns
-        self.ignore_patterns = self.load_ignore_patterns()
+        # Initialize ignore patterns
+        self.ignore_patterns: List[str] = []
         if ignore_patterns:
             self.ignore_patterns.extend(ignore_patterns)
 
-    def load_ignore_patterns(self) -> List[str]:
+    async def load_ignore_patterns(self) -> List[str]:
         """Load ignore patterns from .neuroloraignore file.
 
         Returns:
@@ -75,25 +75,19 @@ class Reporter:
         patterns: List[str] = []
 
         try:
-            if ignore_file.exists():
-                with open(ignore_file, "r", encoding="utf-8") as f:
-                    for line in f:
-                        line = line.strip()
-                        # Skip empty lines and comments
-                        if line and not line.startswith("#"):
-                            patterns.append(line)
-        except FileNotFoundError:
-            logger.warning("Could not find .neuroloraignore file")
-        except PermissionError:
-            logger.error("Permission denied accessing .neuroloraignore")
-        except UnicodeDecodeError:
-            logger.error("Invalid file encoding in .neuroloraignore")
-        except OSError as e:
-            logger.error("System error reading .neuroloraignore: %s", str(e))
+            if await async_io.path_exists(ignore_file):
+                content = await async_io.read_file(ignore_file)
+                for line in content.splitlines():
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if line and not line.startswith("#"):
+                        patterns.append(line)
+        except Exception as e:
+            logger.error(f"Error loading .neuroloraignore: {str(e)}")
 
         return patterns
 
-    def should_ignore(self, path: Path) -> bool:
+    async def should_ignore(self, path: Path) -> bool:
         """Check if file/directory should be ignored based on patterns.
 
         Args:
@@ -130,44 +124,75 @@ class Reporter:
                 return True
 
             try:
-                if path.exists() and path.stat().st_size > 1024 * 1024:
+                size = await async_io.get_file_size(path)
+                if size and size > self.large_file_threshold:
                     return True
-            except (FileNotFoundError, PermissionError) as e:
-                logger.error("Error checking file size: %s", str(e))
+            except Exception as e:
+                logger.error(f"Error checking file size: {str(e)}")
                 return True
 
             return False
         except ValueError:
             return True
 
-    def count_lines(self, filepath: Path) -> int:
-        """Count non-empty lines in file.
+    async def analyze_file(self, filepath: Path) -> FileData:
+        """Analyze single file metrics.
 
         Args:
             filepath: Path to file
 
         Returns:
-            int: Number of non-empty lines
+            FileData: File metrics including size, lines, and tokens
         """
         try:
-            # Try to detect if file is binary
-            with open(filepath, "rb") as f:
-                chunk = f.read(1024)
-                if b"\0" in chunk:  # Binary file detection
-                    return 0
+            size = await async_io.get_file_size(filepath)
+            if not size:
+                raise FileNotFoundError(f"Could not get size for {filepath}")
 
-            # If not binary, count lines
-            with filepath.open("r", encoding="utf-8") as f:
-                return sum(1 for line in f if line.strip())
-        except UnicodeDecodeError:
-            logger.warning("Binary file detected: %s", filepath)
-            return 0
-        except (FileNotFoundError, PermissionError) as e:
-            logger.error("Error accessing file %s: %s", filepath, str(e))
-            return 0
-        except OSError as e:
-            logger.error("System error reading file %s: %s", filepath, str(e))
-            return 0
+            # Skip detailed analysis for large files
+            if size > self.large_file_threshold:
+                return cast(
+                    FileData,
+                    {
+                        "path": str(filepath.relative_to(self.root_dir)),
+                        "size_bytes": size,
+                        "tokens": 0,
+                        "lines": 0,
+                        "is_large": True,
+                        "is_complex": False,
+                        "error": False,
+                    },
+                )
+
+            lines = await async_io.count_lines(filepath)
+            tokens = self.estimate_tokens(size)
+
+            return cast(
+                FileData,
+                {
+                    "path": str(filepath.relative_to(self.root_dir)),
+                    "size_bytes": size,
+                    "tokens": tokens,
+                    "lines": lines,
+                    "is_large": False,
+                    "is_complex": lines > self.large_lines_threshold,
+                    "error": False,
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error analyzing file {filepath}: {str(e)}")
+            return cast(
+                FileData,
+                {
+                    "path": str(filepath.relative_to(self.root_dir)),
+                    "size_bytes": 0,
+                    "tokens": 0,
+                    "lines": 0,
+                    "is_large": False,
+                    "is_complex": False,
+                    "error": True,
+                },
+            )
 
     def estimate_tokens(self, size_bytes: int) -> int:
         """Estimate number of tokens based on file size.
@@ -180,77 +205,29 @@ class Reporter:
         """
         return size_bytes // 4
 
-    def analyze_file(self, filepath: Path) -> FileData:
-        """Analyze single file metrics.
-
-        Args:
-            filepath: Path to file
+    def _make_sync_ignore_func(self: "Reporter") -> Callable[[Path], bool]:
+        """Create a synchronous version of should_ignore.
 
         Returns:
-            FileData: File metrics including size, lines, and tokens
+            Callable[[Path], bool]: Synchronous ignore function
         """
-        try:
-            size_bytes = filepath.stat().st_size
+        loop = asyncio.get_event_loop()
 
-            # Skip detailed analysis for large files
-            if size_bytes > self.large_file_threshold:
-                return cast(
-                    FileData,
-                    {
-                        "path": str(filepath.relative_to(self.root_dir)),
-                        "size_bytes": size_bytes,
-                        "tokens": 0,
-                        "lines": 0,
-                        "is_large": True,
-                        "is_complex": False,
-                        "error": False,
-                    },
-                )
+        def sync_ignore(path: Path) -> bool:
+            return bool(loop.run_until_complete(self.should_ignore(path)))
 
-            lines = self.count_lines(filepath)
-            tokens = self.estimate_tokens(size_bytes)
+        return sync_ignore
 
-            return cast(
-                FileData,
-                {
-                    "path": str(filepath.relative_to(self.root_dir)),
-                    "size_bytes": size_bytes,
-                    "tokens": tokens,
-                    "lines": lines,
-                    "is_large": False,
-                    "is_complex": lines > self.large_lines_threshold,
-                    "error": False,
-                },
-            )
-        except FileNotFoundError:
-            logger.error("File not found: %s", filepath)
-        except PermissionError:
-            logger.error("Permission denied accessing file: %s", filepath)
-        except OSError as e:
-            logger.error(
-                "System error analyzing file %s: %s", filepath, str(e)
-            )
-
-        # Return error data for any failure
-        return cast(
-            FileData,
-            {
-                "path": str(filepath.relative_to(self.root_dir)),
-                "size_bytes": 0,
-                "tokens": 0,
-                "lines": 0,
-                "is_large": False,
-                "is_complex": False,
-                "error": True,
-            },
-        )
-
-    def analyze_project_structure(self) -> ReportData:
+    async def analyze_project_structure(self) -> ReportData:
         """Analyze entire project structure.
 
         Returns:
             ReportData: Project metrics including all files and totals
         """
+        # Load ignore patterns if not already loaded
+        if not self.ignore_patterns:
+            self.ignore_patterns = await self.load_ignore_patterns()
+
         report_data: ReportData = {
             "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "files": [],
@@ -261,34 +238,28 @@ class Reporter:
             "error_files": 0,
         }
 
-        for dirpath, dirs, files in os.walk(self.root_dir):
-            current_path = Path(dirpath)
+        # Walk directory asynchronously
+        all_files = await async_io.walk_directory(
+            self.root_dir, self._make_sync_ignore_func()
+        )
 
-            # Skip ignored directories
-            dirs[:] = [
-                d for d in dirs if not self.should_ignore(current_path / d)
-            ]
+        # Analyze each file
+        for filepath in all_files:
+            file_data = await self.analyze_file(filepath)
+            report_data["files"].append(file_data)
 
-            for filename in files:
-                filepath = current_path / filename
-                if self.should_ignore(filepath):
-                    continue
-
-                file_data = self.analyze_file(filepath)
-                report_data["files"].append(file_data)
-
-                report_data["total_size"] += file_data["size_bytes"]
-                if file_data.get("error", False):
-                    report_data["error_files"] += 1
-                elif file_data["is_large"]:
-                    report_data["large_files"] += 1
-                else:
-                    report_data["total_lines"] += file_data["lines"]
-                    report_data["total_tokens"] += file_data["tokens"]
+            report_data["total_size"] += file_data["size_bytes"]
+            if file_data.get("error", False):
+                report_data["error_files"] += 1
+            elif file_data["is_large"]:
+                report_data["large_files"] += 1
+            else:
+                report_data["total_lines"] += file_data["lines"]
+                report_data["total_tokens"] += file_data["tokens"]
 
         return report_data
 
-    def generate_report(self) -> Optional[Path]:
+    async def generate_report(self) -> Optional[Path]:
         """Generate project structure report.
 
         Returns:
@@ -296,7 +267,7 @@ class Reporter:
         """
         try:
             # Analyze project structure
-            report_data = self.analyze_project_structure()
+            report_data = await self.analyze_project_structure()
 
             # Create output file with new naming scheme
             output_path = self.storage.get_output_path(
@@ -304,20 +275,14 @@ class Reporter:
             )
 
             # Generate markdown report
-            self.generate_markdown_report(report_data, output_path)
+            await self.generate_markdown_report(report_data, output_path)
 
             return output_path
-        except (ValueError, TypeError) as e:
-            logger.error("Invalid input error: %s", str(e))
-            return None
-        except OSError as e:
-            logger.error("System error: %s", str(e))
-            return None
-        except RuntimeError as e:
-            logger.error("Runtime error: %s", str(e))
+        except Exception as e:
+            logger.error(f"Error generating report: {str(e)}")
             return None
 
-    def generate_markdown_report(
+    async def generate_markdown_report(
         self, report_data: ReportData, output_path: Path
     ) -> None:
         """Generate markdown report from analysis data.
@@ -326,108 +291,107 @@ class Reporter:
             report_data: Analysis results
             output_path: Where to save the report
         """
-        with output_path.open("w", encoding="utf-8") as f:
-            # Header
-            f.write("# Project Structure Report\n\n")
-            f.write(
-                "Description: Project structure analysis with metrics "
-                "and recommendations\n"
+        # Build report content
+        content: List[str] = []
+
+        # Header
+        content.append("# Project Structure Report\n\n")
+        content.append(
+            "Description: Project structure analysis with metrics "
+            "and recommendations\n"
+        )
+        content.append(f"Generated: {report_data['last_updated']}\n\n")
+
+        # Files section with tree structure
+        content.append("## Project Tree\n\n")
+        files = sorted(report_data["files"], key=lambda x: x["path"])
+
+        # Build tree structure
+        current_path: List[str] = []
+        for file_data in files:
+            parts = file_data["path"].split("/")
+
+            # Find common prefix
+            i = 0
+            while i < len(current_path) and i < len(parts) - 1:
+                if current_path[i] != parts[i]:
+                    break
+                i += 1
+
+            # Remove different parts
+            while len(current_path) > i:
+                current_path.pop()
+
+            # Add new parts
+            while i < len(parts) - 1:
+                content.append("│   " * len(current_path))
+                content.append("├── " + parts[i] + "/\n")
+                current_path.append(parts[i])
+                i += 1
+
+            # Write file entry
+            content.append("│   " * len(current_path))
+            content.append("├── ")
+            content.append(self._format_file_entry(file_data))
+
+        # Summary
+        content.append("\n## Summary\n\n")
+        total_kb = report_data["total_size"] / 1024
+        content.append("| Metric | Value |\n")
+        content.append("|--------|-------|\n")
+        content.append(f"| Total Size | {total_kb:.1f}KB |\n")
+        content.append(f"| Total Lines | {report_data['total_lines']} |\n")
+        content.append(f"| Total Tokens | ~{report_data['total_tokens']} |\n")
+        content.append(f"| Large Files | {report_data['large_files']} |\n")
+        if report_data["error_files"] > 0:
+            content.append(
+                f"| Files with Errors | {report_data['error_files']} |\n"
             )
-            f.write(f"Generated: {report_data['last_updated']}\n\n")
 
-            # Files section with tree structure
-            f.write("## Project Tree\n\n")
-            files = sorted(report_data["files"], key=lambda x: x["path"])
+        # Notes
+        content.append("\n## Notes\n\n")
+        content.append("- 📦 File size indicators:\n")
+        content.append("  - Files larger than 1MB are marked as large files\n")
+        content.append(
+            "  - Size is shown in KB for files ≥ 1KB, bytes otherwise\n"
+        )
+        content.append("- 📊 Code metrics:\n")
+        content.append("  - 🔴 indicates files with more than 300 lines\n")
+        content.append("  - Token count is estimated (4 chars ≈ 1 token)\n")
+        content.append("  - Empty lines are excluded from line count\n")
+        content.append("- ⚠️ Processing:\n")
+        content.append(
+            "  - Binary files and files with encoding errors " "are skipped\n"
+        )
+        content.append("  - Files matching ignore patterns are excluded\n\n")
 
-            # Build tree structure
-            current_path: List[str] = []
-            for file_data in files:
-                parts = file_data["path"].split("/")
-
-                # Find common prefix
-                i = 0
-                while i < len(current_path) and i < len(parts) - 1:
-                    if current_path[i] != parts[i]:
-                        break
-                    i += 1
-
-                # Remove different parts
-                while len(current_path) > i:
-                    current_path.pop()
-
-                # Add new parts
-                while i < len(parts) - 1:
-                    f.write("│   " * len(current_path))
-                    f.write("├── " + parts[i] + "/\n")
-                    current_path.append(parts[i])
-                    i += 1
-
-                # Write file entry
-                f.write("│   " * len(current_path))
-                f.write("├── ")
-                self._write_file_entry(f, file_data)
-
-            # Summary
-            f.write("\n## Summary\n\n")
-            total_kb = report_data["total_size"] / 1024
-            f.write("| Metric | Value |\n")
-            f.write("|--------|-------|\n")
-            f.write(f"| Total Size | {total_kb:.1f}KB |\n")
-            f.write(f"| Total Lines | {report_data['total_lines']} |\n")
-            f.write(f"| Total Tokens | ~{report_data['total_tokens']} |\n")
-            f.write(f"| Large Files | {report_data['large_files']} |\n")
-            if report_data["error_files"] > 0:
-                f.write(
-                    f"| Files with Errors | {report_data['error_files']} |\n"
+        # Recommendations
+        content.append("## Recommendations\n\n")
+        content.append(
+            "The following files might benefit from being split "
+            "into smaller modules:\n\n"
+        )
+        complex_files = [f for f in files if f["is_complex"]]
+        if complex_files:
+            for file_data in sorted(
+                complex_files, key=lambda x: x["lines"], reverse=True
+            ):
+                lines = file_data["lines"]
+                suggested_modules = self._calculate_suggested_modules(lines)
+                avg_lines = lines // suggested_modules
+                content.append(
+                    f"- {file_data['path']} ({lines} lines) 🔴\n"
+                    f"  - Consider splitting into {suggested_modules} "
+                    f"modules of ~{avg_lines} lines each\n"
                 )
-
-            # Notes
-            f.write("\n## Notes\n\n")
-            f.write("- 📦 File size indicators:\n")
-            f.write("  - Files larger than 1MB are marked as large files\n")
-            f.write(
-                "  - Size is shown in KB for files ≥ 1KB, bytes otherwise\n"
+        else:
+            content.append(
+                "No files currently exceed the recommended "
+                "size limit (300 lines).\n"
             )
-            f.write("- 📊 Code metrics:\n")
-            f.write("  - 🔴 indicates files with more than 300 lines\n")
-            f.write("  - Token count is estimated (4 chars ≈ 1 token)\n")
-            f.write("  - Empty lines are excluded from line count\n")
-            f.write("- ⚠️ Processing:\n")
-            f.write(
-                "  - Binary files and files with encoding errors "
-                "are skipped\n"
-            )
-            f.write("  - Files matching ignore patterns are excluded\n\n")
 
-            # Recommendations
-            f.write("## Recommendations\n\n")
-            f.write(
-                "The following files might benefit from being split "
-                "into smaller modules:\n\n"
-            )
-            complex_files = [f for f in files if f["is_complex"]]
-            if complex_files:
-                for file_data in sorted(
-                    complex_files, key=lambda x: x["lines"], reverse=True
-                ):
-                    lines = file_data["lines"]
-                    suggested_modules = self._calculate_suggested_modules(
-                        lines
-                    )
-                    avg_lines = lines // suggested_modules
-                    f.write(
-                        f"- {file_data['path']} ({lines} lines) 🔴\n"
-                        f"  - Consider splitting into {suggested_modules} "
-                        f"modules of ~{avg_lines} lines each\n"
-                    )
-            else:
-                f.write(
-                    "No files currently exceed the recommended "
-                    "size limit (300 lines).\n"
-                )
-
-            # Ensure file is written
-            f.flush()
+        # Write report to file
+        await async_io.write_file(output_path, "".join(content))
 
     def _calculate_suggested_modules(self, lines: int) -> int:
         """Calculate suggested number of modules for splitting a file.
@@ -442,12 +406,14 @@ class Reporter:
             lines + self.large_lines_threshold - 1
         ) // self.large_lines_threshold
 
-    def _write_file_entry(self, f: TextIO, file_data: FileData) -> None:
-        """Write a single file entry in the report.
+    def _format_file_entry(self, file_data: FileData) -> str:
+        """Format a single file entry for the report.
 
         Args:
-            f: File handle to write to
             file_data: Data for the file entry
+
+        Returns:
+            str: Formatted file entry
         """
         size_kb = file_data["size_bytes"] / 1024
         size_str = (
@@ -458,14 +424,14 @@ class Reporter:
 
         filename = file_data["path"].split("/")[-1]
         if file_data.get("error", False):
-            f.write(f"{filename} (⚠️ Error accessing file)\n")
+            return f"{filename} (⚠️ Error accessing file)\n"
         elif file_data["is_large"]:
-            f.write(f"{filename} ({size_str}) ⚠️ Large file\n")
+            return f"{filename} ({size_str}) ⚠️ Large file\n"
         else:
             complexity_marker = "🔴" if file_data["is_complex"] else ""
             tokens_str = f"~{file_data['tokens']} tokens"
             lines_str = f"{file_data['lines']} lines"
-            f.write(
+            return (
                 f"{filename} ({size_str}, {tokens_str}, "
                 f"{lines_str}) {complexity_marker}\n"
             )

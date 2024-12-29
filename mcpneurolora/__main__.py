@@ -6,7 +6,6 @@ and handles configuration setup.
 
 import asyncio
 import json
-import logging
 import signal
 import sys
 from pathlib import Path
@@ -14,16 +13,14 @@ from types import FrameType
 from typing import Dict, List, TypedDict, cast
 
 from .config import setup_environment
+from .log_utils import LogCategory, get_logger, configure_mcp_logging
 from .server import run_mcp_server, run_terminal_server
-
-# Configure logging before other imports
-logging.basicConfig(level=logging.WARNING)
 
 # Global flag for graceful shutdown
 shutdown_requested = False
 
-# Get module logger
-logger = logging.getLogger(__name__)
+# Get module logger with category
+logger = get_logger(__name__, LogCategory.CONFIG)
 
 
 def handle_shutdown(signum: int, frame: FrameType | None) -> None:
@@ -60,26 +57,9 @@ def get_config_paths() -> List[Path]:
     Returns:
         List[Path]: The paths to the configuration files
     """
-    home = Path.home()
-    base_path = (
-        home
-        / "Library"
-        / "Application Support"
-        / "Code"
-        / "User"
-        / "globalStorage"
-    )
+    from .config import get_vscode_settings_paths
 
-    return [
-        base_path
-        / "saoudrizwan.claude-dev"
-        / "settings"
-        / "cline_mcp_settings.json",
-        base_path
-        / "rooveterinaryinc.roo-cline"
-        / "settings"
-        / "cline_mcp_settings.json",
-    ]
+    return get_vscode_settings_paths()
 
 
 def configure_cline(config_paths: List[Path] | None = None) -> None:
@@ -200,12 +180,8 @@ def main() -> None:
     - Production mode: MCP server with stdio transport
     - Terminal mode: Interactive JSON-RPC terminal for development
     """
-    # Set logging levels for all MCP modules
-    logging.getLogger("mcp").setLevel(logging.WARNING)
-    logging.getLogger("mcp.server").setLevel(logging.WARNING)
-    logging.getLogger("mcp.server.fastmcp").setLevel(logging.WARNING)
-    logging.getLogger("mcp.server.transport").setLevel(logging.WARNING)
-    logging.getLogger("mcp.server.request").setLevel(logging.WARNING)
+    # Configure MCP module logging
+    configure_mcp_logging()
 
     # Set up environment
     setup_environment()

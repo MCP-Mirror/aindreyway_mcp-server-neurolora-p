@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from ..types import Context
-
+from ..utils import async_io
 from ..tools import Collector, Reporter
 from ..tools.improver import Improver
 from ..tools.requester import Requester
@@ -48,13 +48,28 @@ class ToolExecutor:
             collector = Collector(project_root=self.project_root)
             logger.info("Starting code collection")
 
-            output_file = collector.collect_code(input_path)
-            if not output_file:
-                logger.error("No files found to process")
-                return "No files found to process"
+            progress = ProgressTracker(
+                total_steps=100,
+                prefix="[Code Collection]",
+            )
+            await progress.start()
 
-            logger.info("Code collection complete: %s", output_file)
-            return str(output_file)
+            try:
+                output_file = await collector.collect_code(input_path)
+                if not output_file:
+                    msg = "No files found to process"
+                    logger.error(msg)
+                    await progress.stop("Error: Collection failed")
+                    return msg
+
+                await progress.stop("Collection complete")
+                logger.info("Code collection complete: %s", output_file)
+                return str(output_file)
+
+            except Exception as e:
+                logger.error("Error during code collection: %s", str(e))
+                await progress.stop("Error: Collection failed")
+                return f"Error during code collection: {str(e)}"
 
         except Exception as e:
             logger.error("Error during code collection: %s", str(e))
@@ -76,11 +91,14 @@ class ToolExecutor:
             reporter = Reporter(root_dir=self.project_root)
             logger.info("Starting project structure analysis")
 
-            report_data = reporter.analyze_project_structure()
+            # Create output path
             output_path = self.project_root / ".neurolora" / output_filename
-            output_path.parent.mkdir(parents=True, exist_ok=True)
+            await async_io.ensure_dir(output_path.parent)
 
-            reporter.generate_markdown_report(report_data, output_path)
+            # Generate report
+            report_data = await reporter.analyze_project_structure()
+            await reporter.generate_markdown_report(report_data, output_path)
+
             logger.info("Project structure report generated: %s", output_path)
             return str(output_path)
 

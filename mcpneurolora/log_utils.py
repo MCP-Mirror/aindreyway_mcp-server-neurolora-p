@@ -112,18 +112,41 @@ def get_logger(
     # Remove any existing handlers
     logger.handlers = []
 
-    # Configure logger
-    logger.setLevel(logging.INFO)
+    # Configure logger with category-specific levels
+    if category:
+        if category == LogCategory.CONFIG:
+            logger.setLevel(
+                logging.WARNING
+            )  # Show only important config messages
+        elif category == LogCategory.STORAGE:
+            logger.setLevel(logging.INFO)  # Show main storage operations
+        elif category == LogCategory.TOOLS:
+            logger.setLevel(logging.INFO)  # Show main tool operations
+        else:
+            logger.setLevel(logging.INFO)  # Default level
+    else:
+        logger.setLevel(logging.INFO)
+
     logger.propagate = False  # Prevent propagation to root logger
 
-    # Create console handler
+    # Create console handler with category-specific formatting
     handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(
-        ColorFormatter(
-            fmt="%(asctime)s %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+
+    # Use compact format for TOOLS category
+    if category == LogCategory.TOOLS:
+        handler.setFormatter(
+            ColorFormatter(
+                fmt="%(message)s",  # No timestamp for cleaner tool output
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
         )
-    )
+    else:
+        handler.setFormatter(
+            ColorFormatter(
+                fmt="%(asctime)s %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
     logger.addHandler(handler)
 
     # Add category as a filter
@@ -131,11 +154,41 @@ def get_logger(
 
         def add_category(record: logging.LogRecord) -> bool:
             record.category = category.value
+            # Filter out debug messages for storage operations
+            if (
+                category == LogCategory.STORAGE
+                and record.levelno < logging.INFO
+            ):
+                return False
+            # Filter out repetitive config messages
+            if (
+                category == LogCategory.CONFIG
+                and record.levelno < logging.WARNING
+            ):
+                return False
             return True
 
         logger.addFilter(add_category)
 
     return logger
+
+
+def configure_mcp_logging(level: int = logging.WARNING) -> None:
+    """Configure logging for all MCP modules.
+
+    Args:
+        level: Logging level to set for MCP modules (default: WARNING)
+    """
+    mcp_modules = [
+        "mcp",
+        "mcp.server",
+        "mcp.server.fastmcp",
+        "mcp.server.transport",
+        "mcp.server.request",
+    ]
+
+    for module in mcp_modules:
+        logging.getLogger(module).setLevel(level)
 
 
 # Example usage:
