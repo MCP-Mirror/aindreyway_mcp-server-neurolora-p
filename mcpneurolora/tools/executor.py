@@ -8,7 +8,7 @@ from ..types import Context
 from ..tools import Collector, Reporter
 from ..tools.improver import Improver
 from ..tools.requester import Requester
-from ..logging import get_logger, LogCategory
+from ..log_utils import get_logger, LogCategory
 from ..utils.progress import ProgressTracker
 
 # Get module logger

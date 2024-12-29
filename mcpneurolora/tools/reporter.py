@@ -8,7 +8,7 @@ from typing import List, Optional, TextIO, TypedDict, cast
 
 from ..file_naming import FileType, format_filename, get_file_pattern
 from ..storage import StorageManager
-from ..logging import get_logger, LogCategory
+from ..log_utils import get_logger, LogCategory
 
 # Get module logger
 logger = get_logger(__name__, LogCategory.TOOLS)
@@ -227,7 +227,9 @@ class Reporter:
         except PermissionError:
             logger.error("Permission denied accessing file: %s", filepath)
         except OSError as e:
-            logger.error("System error analyzing file %s: %s", filepath, str(e))
+            logger.error(
+                "System error analyzing file %s: %s", filepath, str(e)
+            )
 
         # Return error data for any failure
         return cast(

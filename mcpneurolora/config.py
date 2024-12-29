@@ -6,7 +6,7 @@ import platform
 from pathlib import Path
 from typing import Dict, List, Optional, TypedDict, cast
 
-from .logging import get_logger, LogCategory
+from .log_utils import get_logger, LogCategory
 
 # Get module logger
 logger = get_logger(__name__, LogCategory.CONFIG)

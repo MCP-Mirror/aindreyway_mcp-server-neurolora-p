@@ -19,7 +19,7 @@ from mcp.types import (
 )
 from pydantic import AnyUrl, TypeAdapter
 
-from .logging import LogCategory, get_logger
+from .log_utils import LogCategory, get_logger
 from .prompts import CommandHelpInput, CommandSuggestionInput, route_command
 from .terminal import JsonRpcTerminal
 from .tools.definitions import (

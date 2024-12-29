@@ -4,36 +4,17 @@ This module handles the storage structure and symlinks for the
 Neurolora project.
 """
 
+import logging
 import os
 from pathlib import Path
 from typing import Optional
 
-try:
-    import appdirs
-except ImportError:
-    raise RuntimeError(
-        "appdirs package is required. Please install it with: pip install appdirs"
-    )
-
-from .log_utils import LogCategory, get_logger
-from .utils import file_lock, sanitize_filename, validate_path
-
 # Get module logger
-logger = get_logger(__name__, LogCategory.STORAGE)
-
-# Application specific constants
-APP_NAME = "mcp"
-APP_AUTHOR = "modelcontextprotocol"
+logger = logging.getLogger(__name__)
 
 
 class StorageManager:
     """Manages storage directories and symlinks for Neurolora."""
-
-    project_root: Path
-    project_name: str
-    mcp_docs_dir: Path
-    project_docs_dir: Path
-    neurolora_link: Path
 
     def __init__(
         self,
@@ -48,40 +29,29 @@ class StorageManager:
             subproject_id: Optional subproject identifier.
                         If provided, will be appended to project name.
         """
-        self.project_root = (
-            validate_path(project_root) if project_root else Path.cwd()
-        )
+        self.project_root = project_root or Path.cwd()
+        logger.info("Initializing storage manager")
+        logger.debug("Project root: %s", self.project_root)
 
         # Get project name and handle subproject
         base_name = self.project_root.name
         if subproject_id:
-            subproject_id = sanitize_filename(subproject_id)
             self.project_name = f"{base_name}-{subproject_id}"
         else:
             self.project_name = base_name
 
-        # Get platform-specific user data directory
-        # On macOS: ~/Library/Application Support/mcp/.mcp-docs
-        # On Linux: ~/.local/share/mcp/.mcp-docs
-        # On Windows: C:\Users\<username>\AppData\Local\modelcontextprotocol\mcp\.mcp-docs
-        self.mcp_docs_dir = (
-            Path(appdirs.user_data_dir(APP_NAME, APP_AUTHOR)) / ".mcp-docs"
-        )
-        try:
-            self.mcp_docs_dir.mkdir(parents=True, exist_ok=True)
-            logger.info("Using platform data directory: %s", self.mcp_docs_dir)
-        except (PermissionError, OSError) as e:
-            logger.error("Failed to create data directory: %s", str(e))
-            raise RuntimeError(f"Failed to create data directory: {str(e)}")
-
-        # Setup project paths
+        # Setup paths according to project structure
+        self.mcp_docs_dir = Path.home() / ".mcp-docs"
         self.project_docs_dir = self.mcp_docs_dir / self.project_name
         self.neurolora_link = self.project_root / ".neurolora"
 
-        logger.info(
-            "Storage manager initialized with docs directory: %s",
-            self.mcp_docs_dir,
-        )
+        # Ensure mcp_docs_dir exists
+        self.mcp_docs_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.debug("Project name: %s", self.project_name)
+        logger.debug("Project docs dir: %s", self.project_docs_dir)
+        logger.debug("Neurolora link: %s", self.neurolora_link)
+        logger.info("Storage manager initialized")
 
     def setup(self) -> None:
         """Setup storage structure and symlinks."""
@@ -102,8 +72,7 @@ class StorageManager:
     def _create_directories(self) -> None:
         """Create required directories."""
         try:
-            # Create all required directories
-            self.mcp_docs_dir.mkdir(parents=True, exist_ok=True)
+            # Create all directories with parents
             self.project_docs_dir.mkdir(parents=True, exist_ok=True)
             logger.info(
                 "Created/verified project directory: %s",
@@ -112,17 +81,37 @@ class StorageManager:
 
             # Create marker file and force immediate directory availability
             marker = self.project_docs_dir / ".initialized"
-            with file_lock(marker):
-                with open(marker, "w") as f:
-                    f.write("initialized")
-                    f.flush()
-                    os.fsync(f.fileno())
+            with open(marker, "w") as f:
+                f.write("initialized")
+                f.flush()
+                os.fsync(f.fileno())
+
+            # Force sync to ensure all changes are written
+            os.sync()
 
             # Verify directory exists and is accessible
             if not self.project_docs_dir.exists():
                 raise RuntimeError(
                     f"Failed to create directory: {self.project_docs_dir}"
                 )
+
+            # Wait for directory to be visible in filesystem
+            import time
+
+            max_retries = 10
+            retry_delay = 0.1  # seconds
+            for _ in range(max_retries):
+                if self.project_docs_dir.exists():
+                    break
+                time.sleep(retry_delay)
+            else:
+                raise RuntimeError(
+                    f"Directory not visible after {max_retries} retries: "
+                    f"{self.project_docs_dir}"
+                )
+
+            # Final sync
+            os.sync()
         except Exception as e:
             logger.error("Error creating directories: %s", str(e))
             raise
@@ -136,14 +125,29 @@ class StorageManager:
                 self.project_docs_dir,
                 ".neurolora",
             )
-            # Verify symlink is created and valid
-            if (
-                not self.neurolora_link.exists()
-                or not self.neurolora_link.is_symlink()
-            ):
+            # Force sync to ensure symlink is visible
+            os.sync()
+
+            # Wait for symlink to be visible in filesystem
+            import time
+
+            max_retries = 10
+            retry_delay = 0.1  # seconds
+            for _ in range(max_retries):
+                if (
+                    self.neurolora_link.exists()
+                    and self.neurolora_link.is_symlink()
+                ):
+                    break
+                time.sleep(retry_delay)
+            else:
                 raise RuntimeError(
-                    f"Failed to create symlink: {self.neurolora_link}"
+                    f"Symlink not visible after {max_retries} retries: "
+                    f"{self.neurolora_link}"
                 )
+
+            # Final sync
+            os.sync()
 
             logger.info(
                 "Symlink created and verified: %s",
@@ -163,29 +167,20 @@ class StorageManager:
             target_path: Path that symlink should point to
             link_name: Name of the symlink for logging
         """
+        logger.debug(
+            "Creating symlink: %s -> %s",
+            link_path,
+            target_path,
+        )
         try:
-            # Convert to Path objects if needed
-            link_path = Path(link_path)
-            target_path = Path(target_path)
-            logger.debug("Using paths:")
-            logger.debug("  link_path: %s", link_path)
-            logger.debug("  target_path: %s", target_path)
-
             # Ensure target directory exists
             target_path.mkdir(parents=True, exist_ok=True)
 
             # Create relative symlink
-            relative_target = os.path.relpath(
-                target_path.resolve(), link_path.parent
-            )
-            logger.debug(
-                "Creating symlink: %s -> %s (relative: %s)",
-                link_path,
-                target_path,
-                relative_target,
-            )
+            relative_target = os.path.relpath(target_path, link_path.parent)
 
             if link_path.exists():
+                logger.debug("Link path exists: %s", link_path)
                 if not link_path.is_symlink():
                     logger.warning("Removing non-symlink %s", link_name)
                     link_path.unlink()
@@ -199,7 +194,9 @@ class StorageManager:
                         relative_target, target_is_directory=True
                     )
             else:
+                logger.debug("Creating new symlink")
                 link_path.symlink_to(relative_target, target_is_directory=True)
+                logger.debug("Created %s symlink", link_name)
 
             # Verify symlink
             if not link_path.exists():
@@ -215,6 +212,7 @@ class StorageManager:
                     f"{resolved} != {target_path}"
                 )
                 raise RuntimeError(msg)
+            logger.debug("Symlink verified successfully")
 
         except Exception as e:
             logger.error("Error creating symlink: %s", str(e))
@@ -235,12 +233,6 @@ class StorageManager:
                        If not provided, uses project_docs_dir.
         """
         try:
-            # Validate and sanitize inputs
-            template_name = sanitize_filename(template_name)
-            output_name = sanitize_filename(output_name)
-            if output_dir:
-                output_dir = validate_path(output_dir)
-
             output_file = (output_dir or self.project_docs_dir) / output_name
             if not output_file.exists():
                 # Copy from template
@@ -249,41 +241,34 @@ class StorageManager:
                 )
                 if template_file.exists():
                     try:
-                        with file_lock(output_file):
-                            # Read template content first
-                            with open(
-                                template_file, "r", encoding="utf-8"
-                            ) as src:
-                                content = src.read()
-                            # Then write to output file
-                            with open(
-                                output_file, "w", encoding="utf-8"
-                            ) as dst:
-                                dst.write(content)
+                        with open(template_file, "r", encoding="utf-8") as src:
+                            content = src.read()
+                        with open(output_file, "w", encoding="utf-8") as dst:
+                            dst.write(content)
+                        logger.debug(f"Created {output_name} from template")
                     except PermissionError:
                         logger.error(
-                            "Permission denied accessing files: "
+                            f"Permission denied accessing files: "
                             f"{output_file} or {template_file}"
                         )
                         raise
                     except UnicodeDecodeError:
                         logger.error(
-                            "Invalid file encoding in template: "
+                            f"Invalid file encoding in template: "
                             f"{template_file}"
                         )
                         raise
                     except IOError as e:
-                        logger.error("I/O error with files: %s", str(e))
+                        logger.error(f"I/O error with files: {str(e)}")
                         raise
                 else:
-                    logger.warning(
-                        "Template file not found: %s", template_file
-                    )
+                    logger.warning(f"Template file not found: {template_file}")
         except (PermissionError, UnicodeDecodeError, IOError) as e:
-            logger.error("File system error with files: %s", str(e))
+            logger.error(f"File system error with files: {str(e)}")
             raise
         except Exception as e:
-            logger.error("Unexpected error with files: %s", str(e))
+            logger.error(f"Unexpected error with files: {str(e)}")
+            logger.debug("Stack trace:", exc_info=True)
             raise
 
     def _create_ignore_file(self) -> None:
@@ -306,6 +291,4 @@ class StorageManager:
         Returns:
             Path: Full path in project docs directory
         """
-        # Sanitize filename before using it
-        safe_name = sanitize_filename(filename)
-        return self.project_docs_dir / safe_name
+        return self.project_docs_dir / filename

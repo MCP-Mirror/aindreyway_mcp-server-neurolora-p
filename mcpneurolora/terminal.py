@@ -23,7 +23,7 @@ from typing import (
 
 from colorama import Style, init
 
-from .logging import LogCategory, get_logger
+from .log_utils import LogCategory, get_logger
 from .providers import is_ai_configured
 from .tools.definitions import COMMANDS
 from .tools.executor import ToolExecutor

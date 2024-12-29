@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Union
 
 from ..file_naming import FileType, format_filename, get_file_pattern
 from ..storage import StorageManager
-from ..logging import get_logger, LogCategory
+from ..log_utils import get_logger, LogCategory
 
 # Get module logger
 logger = get_logger(__name__, LogCategory.TOOLS)
