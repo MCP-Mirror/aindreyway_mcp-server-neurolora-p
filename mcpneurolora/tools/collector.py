@@ -1,7 +1,7 @@
 """Code collection functionality."""
 
-import asyncio
 import fnmatch
+import os
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Union
 
@@ -9,6 +9,7 @@ from ..file_naming import FileType, format_filename, get_file_pattern
 from ..log_utils import LogCategory, get_logger
 from ..storage import StorageManager
 from ..utils import async_io
+from ..utils.validation import validate_path
 
 # Get module logger
 logger = get_logger(__name__, LogCategory.TOOLS)
@@ -85,6 +86,9 @@ class Collector:
         Args:
             project_root: Optional path to project root directory.
                         If not provided, uses current working directory.
+
+        Raises:
+            RuntimeError: If storage setup fails.
         """
         # Get the project root directory
         self.project_root = project_root or Path.cwd()
@@ -94,9 +98,9 @@ class Collector:
         try:
             self.storage.setup()
             logger.info("Storage setup completed successfully")
-        except Exception as e:
-            logger.error("Failed to setup storage: %s", str(e))
-            raise RuntimeError(f"Storage setup failed: {str(e)}")
+        except Exception as err:
+            logger.error("Failed to setup storage: %s", str(err))
+            raise RuntimeError(f"Storage setup failed: {str(err)}")
 
         # Load ignore patterns
         self.ignore_patterns: List[str] = []
@@ -109,7 +113,7 @@ class Collector:
         """
         # First check for user's .neuroloraignore
         ignore_file = self.project_root / ".neuroloraignore"
-        logger.debug(f"Looking for ignore file at: {ignore_file}")
+        logger.debug("Looking for ignore file at: %s", ignore_file)
 
         patterns: List[str] = []
         try:
@@ -120,11 +124,11 @@ class Collector:
                     # Skip empty lines and comments
                     if line and not line.startswith("#"):
                         patterns.append(line)
-                logger.debug(f"Loaded {len(patterns)} ignore patterns")
+                logger.debug("Loaded %d ignore patterns", len(patterns))
             else:
                 logger.debug("No .neuroloraignore found, using empty patterns")
-        except Exception as e:
-            logger.error(f"Error loading .neuroloraignore: {str(e)}")
+        except Exception as err:
+            logger.error("Error loading .neuroloraignore: %s", str(err))
 
         return patterns
 
@@ -137,13 +141,14 @@ class Collector:
         Returns:
             bool: True if file should be ignored, False otherwise.
         """
-        # Get relative path from project root
+        # Validate and get relative path
+        file_path = validate_path(file_path)
         try:
             relative_path = file_path.relative_to(self.project_root)
-            logger.debug(f"Checking path: {relative_path} (from {file_path})")
+            logger.debug("Checking path: %s (from %s)", relative_path, file_path)
         except ValueError:
             relative_path = file_path
-            logger.debug(f"Using absolute path: {file_path}")
+            logger.debug("Using absolute path: %s", file_path)
 
         str_path = str(relative_path)
 
@@ -152,20 +157,19 @@ class Collector:
             # Handle directory patterns (ending with /)
             if pattern.endswith("/"):
                 if any(part == pattern[:-1] for part in relative_path.parts):
-                    logger.debug(f"Ignoring by directory pattern: {pattern}")
+                    logger.debug("Ignoring by directory pattern: %s", pattern)
                     return True
             # Handle file patterns
             elif fnmatch.fnmatch(str_path, pattern) or fnmatch.fnmatch(
                 file_path.name, pattern
             ):
-                logger.debug(f"Ignoring by file pattern: {pattern}")
+                logger.debug("Ignoring by file pattern: %s", pattern)
                 return True
 
         # Check for generated files using new naming patterns
         for file_type in FileType:
-            pattern = get_file_pattern(file_type)
-            if pattern.match(str(file_path)):
-                logger.debug(f"Ignoring generated file: {file_type}")
+            if get_file_pattern(file_type).search(str(file_path)):
+                logger.debug("Ignoring generated file: %s", file_type)
                 return True
 
         # Always ignore .neuroloraignore files
@@ -174,22 +178,59 @@ class Collector:
             return True
 
         try:
-            # Handle large files (> 1MB)
-            MAX_SIZE = 1024 * 1024  # 1MB
+            # Check file permissions
+            if not os.access(str(file_path), os.R_OK):
+                logger.error("Permission denied accessing file: %s", file_path)
+                return True
+
+            # Check file size
             size = await async_io.get_file_size(file_path)
-            if size and size > MAX_SIZE:
+            if size and size > 1024 * 1024:  # 1MB
                 logger.debug(
-                    f"Ignoring large file ({size} bytes): {file_path}"
+                    "Ignoring large file (%d bytes): %s",
+                    size,
+                    file_path,
                 )
                 return True
-        except Exception as e:
-            logger.error(f"Error checking file size for {str_path}: {str(e)}")
+
+            # Try to read file content in binary mode first
+            try:
+                with open(file_path, "rb") as f:
+                    binary_content = f.read(1024)  # Read first 1KB to check
+                    if b"\x00" in binary_content:  # Check for null bytes
+                        logger.warning("Binary file detected: %s", file_path)
+                        return True
+            except Exception as err:
+                logger.error("Error reading file in binary mode: %s", str(err))
+                return True
+
+            # Try to read as text
+            try:
+                text_content = await async_io.read_file(file_path)
+                # Check if content has high ASCII characters
+                for char in text_content:
+                    if ord(char) > 127:
+                        logger.warning("Binary file detected: %s", file_path)
+                        return True
+            except (UnicodeDecodeError, PermissionError) as err:
+                if isinstance(err, UnicodeDecodeError):
+                    logger.warning("Binary file detected: %s", file_path)
+                else:
+                    logger.error("Permission denied accessing file: %s", file_path)
+                return True
+            except Exception as err:
+                logger.error("Error reading file: %s", str(err))
+                return True
+
+            # File is readable, not binary, and not too large
+            logger.debug("File will be included: %s", file_path)
+            return False
+
+        except Exception as err:
+            logger.error("Error checking file %s: %s", str_path, str(err))
             return True
 
-        logger.debug(f"File will be included: {file_path}")
-        return False
-
-    def make_anchor(self, path: Path) -> str:
+    def make_anchor(self, path: Union[str, Path]) -> str:
         """Create a valid markdown anchor from a path.
 
         Args:
@@ -201,62 +242,63 @@ class Collector:
         anchor = str(path).lower()
         return anchor.replace("/", "-").replace(".", "-").replace(" ", "-")
 
+    def _check_ignore_patterns(self, path: Path) -> bool:
+        """Check if path matches any ignore patterns.
+
+        Args:
+            path: Path to check
+
+        Returns:
+            bool: True if path should be ignored
+        """
+        # Validate and get relative path
+        path = validate_path(path)
+        try:
+            relative_path = path.relative_to(self.project_root)
+            logger.debug("Checking path: %s (from %s)", relative_path, path)
+        except ValueError:
+            relative_path = path
+            logger.debug("Using absolute path: %s", path)
+
+        str_path = str(relative_path)
+
+        # Check each ignore pattern
+        for pattern in self.ignore_patterns:
+            # Handle directory patterns (ending with /)
+            if pattern.endswith("/"):
+                if any(part == pattern[:-1] for part in relative_path.parts):
+                    logger.debug("Ignoring by directory pattern: %s", pattern)
+                    return True
+            # Handle file patterns
+            elif fnmatch.fnmatch(str_path, pattern) or fnmatch.fnmatch(
+                path.name, pattern
+            ):
+                logger.debug("Ignoring by file pattern: %s", pattern)
+                return True
+
+        # Check for generated files using new naming patterns
+        for file_type in FileType:
+            if get_file_pattern(file_type).search(str(path)):
+                logger.debug("Ignoring generated file: %s", file_type)
+                return True
+
+        # Always ignore .neuroloraignore files
+        if path.name == ".neuroloraignore":
+            logger.debug("Ignoring .neuroloraignore file")
+            return True
+
+        logger.debug("File will be included: %s", path)
+        return False
+
     def _make_sync_ignore_func(self) -> Callable[[Path], bool]:
         """Create a synchronous version of should_ignore_file.
 
         Returns:
             Callable[[Path], bool]: Synchronous ignore function
         """
+        return self._check_ignore_patterns
 
-        def sync_ignore(path: Path) -> bool:
-            # Get relative path from project root
-            try:
-                relative_path = path.relative_to(self.project_root)
-                logger.debug(f"Checking path: {relative_path} (from {path})")
-            except ValueError:
-                relative_path = path
-                logger.debug(f"Using absolute path: {path}")
-
-            str_path = str(relative_path)
-
-            # Check each ignore pattern
-            for pattern in self.ignore_patterns:
-                # Handle directory patterns (ending with /)
-                if pattern.endswith("/"):
-                    if any(
-                        part == pattern[:-1] for part in relative_path.parts
-                    ):
-                        logger.debug(
-                            f"Ignoring by directory pattern: {pattern}"
-                        )
-                        return True
-                # Handle file patterns
-                elif fnmatch.fnmatch(str_path, pattern) or fnmatch.fnmatch(
-                    path.name, pattern
-                ):
-                    logger.debug(f"Ignoring by file pattern: {pattern}")
-                    return True
-
-            # Check for generated files using new naming patterns
-            for file_type in FileType:
-                pattern = get_file_pattern(file_type)
-                if pattern.match(str(path)):
-                    logger.debug(f"Ignoring generated file: {file_type}")
-                    return True
-
-            # Always ignore .neuroloraignore files
-            if path.name == ".neuroloraignore":
-                logger.debug("Ignoring .neuroloraignore file")
-                return True
-
-            logger.debug(f"File will be included: {path}")
-            return False
-
-        return sync_ignore
-
-    async def collect_files(
-        self, input_paths: Union[str, List[str]]
-    ) -> List[Path]:
+    async def collect_files(self, input_paths: Union[str, List[str]]) -> List[Path]:
         """Collect all relevant files from input paths.
 
         Args:
@@ -272,7 +314,7 @@ class Collector:
         # Load ignore patterns if not already loaded
         if not self.ignore_patterns:
             self.ignore_patterns = await self.load_ignore_patterns()
-            logger.debug(f"Using ignore patterns: {self.ignore_patterns}")
+            logger.debug("Using ignore patterns: %s", self.ignore_patterns)
 
         all_files: List[Path] = []
         for input_path in input_paths:
@@ -283,46 +325,42 @@ class Collector:
                     path = (self.project_root / path).resolve()
                 else:
                     path = path.resolve()
-                logger.debug(f"Processing path: {path}")
-            except (ValueError, RuntimeError) as e:
-                logger.error(f"Invalid path format {input_path}: {str(e)}")
+                logger.debug("Processing path: %s", path)
+            except (ValueError, RuntimeError) as err:
+                logger.error("Invalid path format %s: %s", input_path, str(err))
                 continue
 
             if not await async_io.path_exists(path):
-                logger.error(f"Path does not exist: {path}")
+                logger.error("Path does not exist: %s", path)
                 continue
 
             # Check if it's a directory
             is_directory = await async_io.is_dir(path)
             if is_directory:
-                logger.debug(f"Walking directory: {path}")
+                logger.debug("Walking directory: %s", path)
                 # It's a directory, walk through it and collect only files
                 files = await async_io.walk_directory(
                     path, self._make_sync_ignore_func()
                 )
-                logger.debug(f"Found {len(files)} files in directory")
+                logger.debug("Found %d files in directory", len(files))
                 for file_path in files:
                     if not await async_io.is_dir(file_path):
-                        logger.debug(f"Checking file: {file_path}")
-                        should_ignore = await self.should_ignore_file(
-                            file_path
-                        )
+                        logger.debug("Checking file: %s", file_path)
+                        should_ignore = await self.should_ignore_file(file_path)
                         if should_ignore:
-                            logger.debug(f"Ignoring file: {file_path}")
+                            logger.debug("Ignoring file: %s", file_path)
                         else:
                             all_files.append(file_path)
-                            logger.debug(
-                                f"Added file from directory: {file_path}"
-                            )
+                            logger.debug("Added file from directory: %s", file_path)
             else:
                 # It's a file, check if we should include it
-                logger.debug(f"Checking single file: {path}")
+                logger.debug("Checking single file: %s", path)
                 should_ignore = await self.should_ignore_file(path)
                 if should_ignore:
-                    logger.debug(f"Ignoring single file: {path}")
+                    logger.debug("Ignoring single file: %s", path)
                 else:
                     all_files.append(path)
-                    logger.debug(f"Added single file: {path}")
+                    logger.debug("Added single file: %s", path)
 
         # Sort files with PROJECT_SUMMARY.md first
         def sort_key(path: Path) -> tuple[int, str]:
@@ -335,7 +373,7 @@ class Collector:
             return (0 if is_summary else 1, str(relative_path))
 
         sorted_files = sorted(all_files, key=sort_key)
-        logger.info(f"Collected {len(sorted_files)} files total")
+        logger.info("Collected %d files total", len(sorted_files))
         return sorted_files
 
     async def collect_code(
@@ -360,27 +398,30 @@ class Collector:
                 return None
 
             # Filter out directories immediately
-            files_to_process = []
+            files_to_process: List[Path] = []
             for file_path in all_files:
                 try:
                     if await async_io.is_dir(file_path):
                         logger.debug(
-                            f"Skipping directory: {file_path}\n"
-                            f"Current working directory: {Path.cwd()}\n"
-                            f"Absolute path: {file_path.absolute()}\n"
-                            f"Parent directory: {file_path.parent}\n"
-                            f"Directory name: {file_path.name}"
+                            "Skipping directory: %s\n"
+                            "Current working directory: %s\n"
+                            "Absolute path: %s\n"
+                            "Parent directory: %s\n"
+                            "Directory name: %s",
+                            file_path,
+                            Path.cwd(),
+                            file_path.absolute(),
+                            file_path.parent,
+                            file_path.name,
                         )
                         continue
                     files_to_process.append(file_path)
-                except Exception as e:
-                    logger.error(f"Error checking path {file_path}: {str(e)}")
+                except Exception as err:
+                    logger.error("Error checking path %s: %s", file_path, str(err))
                     continue
 
             if not files_to_process:
-                logger.warning(
-                    "No files found to process after filtering directories"
-                )
+                logger.warning("No files found to process after filtering directories")
                 return None
 
             # Create output files with new naming scheme
@@ -392,7 +433,7 @@ class Collector:
             await async_io.ensure_dir(code_output_path.parent)
 
             # Build code collection content
-            content = ["# Code Collection\n\n"]
+            content: List[str] = ["# Code Collection\n\n"]
             content.append(
                 "This file contains code from the specified paths, "
                 "organized by file path.\n\n"
@@ -405,7 +446,7 @@ class Collector:
                     relative_path = file_path.relative_to(self.project_root)
                 except ValueError:
                     relative_path = file_path
-                anchor = self.make_anchor(relative_path)
+                anchor = self.make_anchor(str(relative_path))
                 content.append(f"- [{relative_path}](#{anchor})\n")
 
             # Add file contents
@@ -416,7 +457,7 @@ class Collector:
                     relative_path = file_path.relative_to(self.project_root)
                 except ValueError:
                     relative_path = file_path
-                anchor = self.make_anchor(relative_path)
+                anchor = self.make_anchor(str(relative_path))
 
                 try:
                     file_content = await async_io.read_file(file_path)
@@ -424,15 +465,11 @@ class Collector:
 
                     content.append(f"### {relative_path} {{{anchor}}}\n")
                     content.append(f"```{lang}\n{file_content}\n```\n\n")
-                    logger.debug(f"Processed file: {relative_path}")
-                except Exception as e:
-                    logger.error(
-                        f"Error processing file {file_path}: {str(e)}"
-                    )
+                    logger.debug("Processed file: %s", relative_path)
+                except Exception as err:
+                    logger.error("Error processing file %s: %s", file_path, str(err))
                     content.append(f"### {relative_path} {{{anchor}}}\n")
-                    content.append(
-                        f"```\n[Error reading file: {str(e)}]\n```\n\n"
-                    )
+                    content.append(f"```\n[Error reading file: {str(err)}]\n```\n\n")
 
             # Write code collection file
             await async_io.write_file(code_output_path, "".join(content))
@@ -441,9 +478,7 @@ class Collector:
             analyze_output_path = self.storage.get_output_path(
                 format_filename(FileType.IMPROVE_PROMPT)
             )
-            prompt_path = (
-                Path(__file__).parent.parent / "prompts" / "improve.prompt.md"
-            )
+            prompt_path = Path(__file__).parent.parent / "prompts" / "improve.prompt.md"
 
             # Read code content and prompt
             code_content = await async_io.read_file(code_output_path)
@@ -456,9 +491,7 @@ class Collector:
 
             # Verify files exist
             if not await async_io.path_exists(code_output_path):
-                raise RuntimeError(
-                    f"Failed to create code file: {code_output_path}"
-                )
+                raise RuntimeError(f"Failed to create code file: {code_output_path}")
             if not await async_io.path_exists(analyze_output_path):
                 raise RuntimeError(
                     f"Failed to create analysis file: {analyze_output_path}"
@@ -469,20 +502,19 @@ class Collector:
             code_content = await async_io.read_file(code_output_path)
             token_count = len(code_content) // 4
 
-            logger.info(f"Analysis prompt created: {analyze_output_path}")
+            logger.info("Analysis prompt created: %s", analyze_output_path)
             logger.info(
-                f"Code collection complete! (Approx. {token_count:,} tokens)"
+                "Code collection complete! (Approx. %d tokens)",
+                token_count,
             )
             return Path(code_output_path)
 
-        except (ValueError, TypeError) as e:
-            logger.error(
-                f"Invalid input error during code collection: {str(e)}"
-            )
+        except (ValueError, TypeError) as err:
+            logger.error("Invalid input error during code collection: %s", str(err))
             return None
-        except OSError as e:
-            logger.error(f"System error during code collection: {str(e)}")
+        except OSError as err:
+            logger.error("System error during code collection: %s", str(err))
             return None
-        except RuntimeError as e:
-            logger.error(f"Runtime error during code collection: {str(e)}")
+        except Exception as err:
+            logger.error("Runtime error during code collection: %s", str(err))
             return None

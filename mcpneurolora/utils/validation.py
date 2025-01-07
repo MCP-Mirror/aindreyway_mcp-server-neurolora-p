@@ -1,7 +1,10 @@
 """Validation utilities for server operations."""
 
 import logging
-from typing import Any, Dict, Optional, TypeVar
+from pathlib import Path
+from typing import Any, Dict, Optional, TypeVar, Union
+
+from pydantic import ValidationError
 
 from ..tools.definitions import COMMANDS
 
@@ -27,9 +30,7 @@ def validate_command(name: str) -> None:
         raise ValueError(f"Not an MCP tool: {name}")
 
 
-def validate_model_type(
-    validated: Any, expected_type: type[T], command_name: str
-) -> T:
+def validate_model_type(validated: Any, expected_type: type[T], command_name: str) -> T:
     """Validate model type matches expected type.
 
     Args:
@@ -62,15 +63,14 @@ def validate_error_response(error: Any) -> Optional[str]:
 
     # Cast error to Dict[str, Any] after type check
     error_dict: Dict[str, Any] = error
-    message: Optional[str] = error_dict.get("message")
-    if not message or not isinstance(message, str):
+    message = error_dict.get("message", "")
+
+    # Handle non-string messages
+    if not isinstance(message, str):
         return None
 
-    message = message.strip()
-    if not message:
-        return None
-
-    return message
+    # Return None for empty messages
+    return message.strip() or None
 
 
 def validate_command_model(name: str) -> Any:
@@ -92,6 +92,27 @@ def validate_command_model(name: str) -> Any:
     return model_cls
 
 
+def validate_path(path: Union[str, Path]) -> Path:
+    """Validate and convert path to Path object.
+
+    Args:
+        path: Path to validate (string or Path)
+
+    Returns:
+        Path: Validated Path object
+
+    Raises:
+        ValueError: If path is invalid
+    """
+    try:
+        # Always convert to Path - it will work for both str and Path
+        return Path(path)
+    except TypeError as e:
+        raise ValueError(f"Invalid path type: {type(path)} - {e}")
+    except Exception as e:
+        raise ValueError(f"Invalid path: {str(e)}")
+
+
 def validate_arguments(model_cls: Any, arguments: Dict[str, Any]) -> Any:
     """Validate arguments using model.
 
@@ -107,6 +128,9 @@ def validate_arguments(model_cls: Any, arguments: Dict[str, Any]) -> Any:
     """
     try:
         return model_cls.model_validate(arguments)
-    except Exception as e:
+    except ValidationError as e:
         logger.error("Argument validation failed: %s", str(e))
+        raise ValueError(f"Invalid arguments: {str(e)}")
+    except Exception as e:
+        logger.error("Unexpected error during validation: %s", str(e))
         raise ValueError(f"Invalid arguments: {str(e)}")

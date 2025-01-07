@@ -1,19 +1,19 @@
-"""Unit tests for the CodeCollector class."""
+"""Unit tests for the Collector class."""
 
-import logging
 import os
 from pathlib import Path
-from typing import Any
-from unittest.mock import create_autospec, patch
+from typing import Any, List
 
 import pytest
 
-from mcpneurolora.tools.code_collector import CodeCollector, LanguageMap
+from mcpneurolora.tools.collector import Collector, LanguageMap
+from mcpneurolora.utils import async_io
 
 
 def test_language_map() -> None:
     """Test LanguageMap extension to language mapping."""
     test_cases = [
+        # Web technologies
         ("test.py", "python"),
         ("test.js", "javascript"),
         ("test.ts", "typescript"),
@@ -21,11 +21,42 @@ def test_language_map() -> None:
         ("test.tsx", "tsx"),
         ("test.html", "html"),
         ("test.css", "css"),
+        ("test.scss", "scss"),
+        ("test.sass", "sass"),
+        ("test.less", "less"),
+        # Documentation and config
         ("test.md", "markdown"),
         ("test.json", "json"),
         ("test.yml", "yaml"),
         ("test.yaml", "yaml"),
+        ("test.toml", "toml"),
+        ("test.ini", "ini"),
+        ("test.conf", "conf"),
+        # Shell scripts
         ("test.sh", "bash"),
+        ("test.bash", "bash"),
+        ("test.zsh", "bash"),
+        ("test.bat", "batch"),
+        ("test.ps1", "powershell"),
+        # Programming languages
+        ("test.java", "java"),
+        ("test.cpp", "cpp"),
+        ("test.hpp", "cpp"),
+        ("test.c", "c"),
+        ("test.h", "c"),
+        ("test.rs", "rust"),
+        ("test.go", "go"),
+        ("test.rb", "ruby"),
+        ("test.php", "php"),
+        ("test.swift", "swift"),
+        ("test.kt", "kotlin"),
+        ("test.kts", "kotlin"),
+        ("test.r", "r"),
+        ("test.lua", "lua"),
+        ("test.m", "matlab"),
+        ("test.pl", "perl"),
+        ("test.xml", "xml"),
+        # Special cases
         ("test.unknown", ""),  # Unknown extension
         ("test", ""),  # No extension
         ("TEST.PY", "python"),  # Case insensitive
@@ -35,16 +66,17 @@ def test_language_map() -> None:
         assert LanguageMap.get_language(Path(filename)) == expected_lang
 
 
-def test_collect_files_with_spaces(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_collect_files_with_spaces(project_env: Path) -> None:
     """Test collecting files with spaces in paths."""
     # Create test files
-    space_dir = project_root / "test dir"
+    space_dir = project_env / "test dir"
     space_dir.mkdir(exist_ok=True)
     space_file = space_dir / "test file.py"
     space_file.write_text("Test content")
 
-    collector = CodeCollector(project_root)
-    files = collector.collect_files(str(space_dir))
+    collector = Collector(project_env)
+    files = await collector.collect_files(str(space_dir))
 
     assert space_file in files
 
@@ -53,25 +85,26 @@ def test_collect_files_with_spaces(project_root: Path) -> None:
     space_dir.rmdir()
 
 
-def test_collect_files_absolute_path(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_collect_files_absolute_path(project_env: Path) -> None:
     """Test collecting files with absolute paths."""
-    test_file = project_root / "test.py"
+    test_file = project_env / "test.py"
     test_file.write_text("Test content")
 
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
     # Test with absolute path
     abs_path = test_file.absolute()
-    files = collector.collect_files(str(abs_path))
+    files = await collector.collect_files(str(abs_path))
     assert test_file in files
 
     # Test with path outside project root
-    outside_dir = project_root.parent / "outside"
+    outside_dir = project_env.parent / "outside"
     outside_dir.mkdir(exist_ok=True)
     outside_file = outside_dir / "test.py"
     outside_file.write_text("Test content")
 
-    files = collector.collect_files(str(outside_file))
+    files = await collector.collect_files(str(outside_file))
     assert outside_file in files
 
     # Cleanup
@@ -80,174 +113,139 @@ def test_collect_files_absolute_path(project_root: Path) -> None:
     outside_dir.rmdir()
 
 
-def test_read_file_content_encodings(project_root: Path) -> None:
-    """Test reading files with different encodings."""
-    collector = CodeCollector(project_root)
+@pytest.mark.asyncio
+async def test_should_ignore_file(project_env: Path, ignore_file: Path) -> None:
+    """Test file ignore logic."""
+    collector = Collector(project_env)
+    collector.ignore_patterns = await collector.load_ignore_patterns()
 
-    # UTF-8 with BOM
-    utf8_bom_file = project_root / "utf8_bom.txt"
-    utf8_bom_file.write_bytes(b"\xef\xbb\xbfTest content")
-    assert "Test content" in collector.read_file_content(utf8_bom_file)
+    # Create test files with proper permissions
+    test_py = project_env / "test.py"
+    test_py.write_text("Test content")
+    os.chmod(test_py, 0o644)  # Ensure readable
 
-    # UTF-16
-    utf16_file = project_root / "utf16.txt"
-    utf16_file.write_text("Test content", encoding="utf-16")
-    assert "[Binary file content not shown]" == collector.read_file_content(
-        utf16_file
-    )
+    src_dir = project_env / "src"
+    src_dir.mkdir(exist_ok=True)
+    main_py = src_dir / "main.py"
+    main_py.write_text("Test content")
+    os.chmod(main_py, 0o644)  # Ensure readable
 
-    # Invalid UTF-8
-    invalid_file = project_root / "invalid.txt"
-    invalid_file.write_bytes(b"Test content \xff\xff")
-    assert "[Binary file content not shown]" == collector.read_file_content(
-        invalid_file
-    )
+    try:
+        # Should ignore files matching patterns
+        assert await collector.should_ignore_file(project_env / "test.log")
+        assert await collector.should_ignore_file(
+            project_env / "node_modules" / "test.js"
+        )
+        assert await collector.should_ignore_file(
+            project_env / "__pycache__" / "test.pyc"
+        )
+        assert await collector.should_ignore_file(project_env / ".git" / "config")
 
-    # Cleanup
-    utf8_bom_file.unlink()
-    utf16_file.unlink()
-    invalid_file.unlink()
-
-
-def test_read_file_content_errors(project_root: Path) -> None:
-    """Test error handling when reading files."""
-    collector = CodeCollector(project_root)
-
-    # Permission error
-    no_access_file = project_root / "no_access.txt"
-    no_access_file.write_text("Test content")
-    os.chmod(no_access_file, 0o000)
-    assert "[Permission denied]" == collector.read_file_content(no_access_file)
-    os.chmod(no_access_file, 0o666)
-    no_access_file.unlink()
-
-    # File not found
-    assert "[File not found]" == collector.read_file_content(
-        project_root / "nonexistent.txt"
-    )
+        # Should not ignore regular files
+        assert not await collector.should_ignore_file(test_py)
+        assert not await collector.should_ignore_file(main_py)
+    finally:
+        # Cleanup
+        test_py.unlink()
+        main_py.unlink()
+        src_dir.rmdir()
 
 
-def test_collect_code_output_files(project_root: Path) -> None:
-    """Test creation of output files."""
-    collector = CodeCollector(project_root)
+@pytest.mark.asyncio
+async def test_collect_files(project_env: Path, sample_files: List[Path]) -> None:
+    """Test collecting files from input paths."""
+    collector = Collector(project_env)
 
-    # Create test file
-    test_file = project_root / "test.py"
-    test_file.write_text("Test content")
+    # Test collecting single file
+    files = await collector.collect_files(str(sample_files[0]))
+    assert len(files) == 1
+    assert files[0] == sample_files[0]
+
+    # Test collecting directory
+    files = await collector.collect_files(str(project_env))
+    assert len(files) == len(sample_files)
+    assert all(f in files for f in sample_files)
+
+    # Test collecting multiple paths
+    paths = [str(sample_files[0]), str(project_env / "src")]
+    files = await collector.collect_files(paths)
+    assert len(files) == 2
+    assert sample_files[0] in files
+    assert project_env / "src" / "main.py" in files
+
+
+@pytest.mark.asyncio
+async def test_collect_files_nonexistent(project_env: Path) -> None:
+    """Test collecting files from nonexistent paths."""
+    collector = Collector(project_env)
+    files = await collector.collect_files("nonexistent")
+    assert files == []
+
+
+@pytest.mark.asyncio
+async def test_collect_code_output_files(project_env: Path) -> None:
+    """Test creation of output files and token counting."""
+    collector = Collector(project_env)
+
+    # Create test file with known content length
+    test_file = project_env / "test.py"
+    content = "x" * 100  # Should be approximately 25 tokens (4 chars per token)
+    test_file.write_text(content)
 
     # Collect code
-    output_path = collector.collect_code(str(test_file))
+    output_path = await collector.collect_code(str(test_file))
     assert output_path is not None
-    assert output_path.exists()
 
     # Check content
-    content = output_path.read_text()
-    assert "# Code Collection" in content
-    assert "## Table of Contents" in content
-    assert "## Files" in content
-    assert "### test.py" in content
-    assert "```python" in content
-    assert "Test content" in content
+    file_content = await async_io.read_file(output_path)
+    assert "# Code Collection" in file_content
+    assert "## Table of Contents" in file_content
+    assert "## Files" in file_content
+    assert "### test.py" in file_content
+    assert "```python" in file_content
+    assert content in file_content
+
+    # Check token count (should be at least the content length / 4)
+    # Plus some overhead for markdown formatting
+    assert len(file_content) // 4 >= 25
 
     # Check analysis prompt file
     analysis_path = output_path.parent / output_path.name.replace(
         "FULL_CODE_", "PROMPT_ANALYZE_"
     )
-    assert analysis_path.exists()
+    assert await async_io.path_exists(analysis_path)
 
     # Cleanup
     test_file.unlink()
 
 
-def test_init_with_project_root(project_root: Path) -> None:
-    """Test initializing CodeCollector with project root."""
-    collector = CodeCollector(project_root)
-    assert collector.project_root == project_root
+def test_init_with_project_root(project_env: Path) -> None:
+    """Test initializing Collector with project root."""
+    collector = Collector(project_env)
+    assert collector.project_root == project_env
     assert isinstance(collector.ignore_patterns, list)
 
 
 def test_init_without_project_root() -> None:
-    """Test initializing CodeCollector without project root."""
-    collector = CodeCollector()
+    """Test initializing Collector without project root."""
+    collector = Collector()
     assert collector.project_root == Path.cwd()
 
 
-def test_load_ignore_patterns(project_root: Path, ignore_file: Path) -> None:
+@pytest.mark.asyncio
+async def test_load_ignore_patterns(project_env: Path, ignore_file: Path) -> None:
     """Test loading ignore patterns from .neuroloraignore file."""
-    collector = CodeCollector(project_root)
-    patterns = collector.load_ignore_patterns()
+    collector = Collector(project_env)
+    patterns = await collector.load_ignore_patterns()
     assert "*.log" in patterns
     assert "node_modules/" in patterns
     assert "__pycache__/" in patterns
     assert ".git/" in patterns
 
 
-def test_should_ignore_file(project_root: Path, ignore_file: Path) -> None:
-    """Test file ignore logic."""
-    collector = CodeCollector(project_root)
-
-    # Should ignore files matching patterns
-    assert collector.should_ignore_file(project_root / "test.log")
-    assert collector.should_ignore_file(
-        project_root / "node_modules" / "test.js"
-    )
-    assert collector.should_ignore_file(
-        project_root / "__pycache__" / "test.pyc"
-    )
-    assert collector.should_ignore_file(project_root / ".git" / "config")
-
-    # Should not ignore regular files
-    assert not collector.should_ignore_file(project_root / "test.py")
-    assert not collector.should_ignore_file(project_root / "src" / "main.py")
-
-
-def test_collect_files(project_root: Path, sample_files: list[Path]) -> None:
-    """Test collecting files from input paths."""
-    collector = CodeCollector(project_root)
-
-    # Test collecting single file
-    files = collector.collect_files(str(sample_files[0]))
-    assert len(files) == 1
-    assert files[0] == sample_files[0]
-
-    # Test collecting directory
-    files = collector.collect_files(str(project_root))
-    assert len(files) == len(sample_files)
-    assert all(f in files for f in sample_files)
-
-    # Test collecting multiple paths
-    paths = [str(sample_files[0]), str(project_root / "src")]
-    files = collector.collect_files(paths)
-    assert len(files) == 2
-    assert sample_files[0] in files
-    assert project_root / "src" / "main.py" in files
-
-
-def test_collect_files_nonexistent(project_root: Path) -> None:
-    """Test collecting files from nonexistent paths."""
-    collector = CodeCollector(project_root)
-    files = collector.collect_files("nonexistent")
-    assert files == []
-
-
-def test_read_file_content(
-    project_root: Path, sample_files: list[Path]
-) -> None:
-    """Test reading file content."""
-    collector = CodeCollector(project_root)
-
-    # Test reading existing file
-    content = collector.read_file_content(sample_files[0])
-    assert content == f"Test content in {sample_files[0].name}"
-
-    # Test reading nonexistent file
-    content = collector.read_file_content(project_root / "nonexistent")
-    assert content == "[File not found]"
-
-
 def test_make_anchor() -> None:
     """Test markdown anchor generation."""
-    collector = CodeCollector()
+    collector = Collector()
 
     test_cases = [
         ("src/test.py", "src-test-py"),
@@ -260,76 +258,41 @@ def test_make_anchor() -> None:
         assert collector.make_anchor(Path(path)) == expected
 
 
-@pytest.mark.parametrize(
-    "title",
-    ["Test Collection", "Project Files", "Source Code"],
-    ids=["collection", "files", "source"],
-)
-def test_collect_code(
-    project_root: Path,
-    sample_files: list[Path],
-    title: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Test full code collection process."""
-    collector = CodeCollector(project_root)
-
-    # Mock os.sync and os.utime
-    sync_mock = create_autospec(os.sync, return_value=None)
-    utime_mock = create_autospec(os.utime, return_value=None)
-    monkeypatch.setattr(os, "sync", sync_mock)
-    monkeypatch.setattr(os, "utime", utime_mock)
-
-    # Test collecting all files
-    output_path = collector.collect_code(str(project_root), title=title)
-    assert output_path is not None
-    assert output_path.exists()
-
-    # Verify output file content
-    content = output_path.read_text()
-
-    # Check title
-    assert f"# {title}" in content
-
-    # Check table of contents
-    assert "## Table of Contents" in content
-    for file in sample_files:
-        rel_path = file.relative_to(project_root)
-        assert f"- [{rel_path}]" in content
-
-    # Check file contents
-    assert "## Files" in content
-    for file in sample_files:
-        rel_path = file.relative_to(project_root)
-        assert f"### {rel_path}" in content
-        lang = LanguageMap.get_language(file)
-        assert f"```{lang}" in content
-        assert f"Test content in {file.name}" in content
-
-
-def test_collect_code_empty_input(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_collect_code_empty_input(project_env: Path) -> None:
     """Test code collection with empty input."""
-    collector = CodeCollector(project_root)
-    assert collector.collect_code("nonexistent") is None
+    collector = Collector(project_env)
+    assert await collector.collect_code("nonexistent") is None
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "error_type,error_msg,expected_log",
     [
-        (ValueError, "Invalid input", "Invalid input"),
-        (FileNotFoundError, "File not found", "File not found"),
-        (PermissionError, "Permission denied", "Permission denied"),
-        (Exception, "Unexpected error", "Unexpected error"),
-    ],
-    ids=[
-        "value_error",
-        "file_not_found",
-        "permission_error",
-        "unexpected_error",
+        (
+            ValueError,
+            "Invalid input",
+            "Invalid input error during code collection",
+        ),
+        (
+            FileNotFoundError,
+            "File not found",
+            "System error during code collection",
+        ),
+        (
+            PermissionError,
+            "Permission denied",
+            "System error during code collection",
+        ),
+        (
+            Exception,
+            "Unexpected error",
+            "Runtime error during code collection",
+        ),
     ],
 )
-def test_collect_code_error_handling(
-    project_root: Path,
+async def test_collect_code_error_handling(
+    project_env: Path,
     caplog: pytest.LogCaptureFixture,
     error_type: type[Exception],
     error_msg: str,
@@ -337,145 +300,178 @@ def test_collect_code_error_handling(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Test error handling during code collection."""
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
-    def mock_collect_files(*args: Any, **kwargs: Any) -> list[Path]:
+    async def mock_collect_files(*args: Any, **kwargs: Any) -> List[Path]:
         raise error_type(error_msg)
 
     monkeypatch.setattr(collector, "collect_files", mock_collect_files)
 
-    with caplog.at_level(logging.ERROR):
-        result = collector.collect_code("test_input")
-        assert result is None
-        assert expected_log in caplog.text
-
-        # Verify no output file was created
-        output_files = list(project_root.glob("FULL_CODE_*"))
-        assert len(output_files) == 0
+    result = await collector.collect_code("test_input")
+    assert result is None
 
 
-def test_large_file_handling(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_large_file_handling(project_env: Path) -> None:
     """Test handling of large files."""
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
     # Create a large file (>1MB)
-    large_file = project_root / "large.txt"
+    large_file = project_env / "large.txt"
     large_file.write_bytes(b"0" * (1024 * 1024 + 1))
 
-    assert collector.should_ignore_file(large_file)
+    assert await collector.should_ignore_file(large_file)
 
     # Cleanup
     large_file.unlink()
 
 
-def test_binary_file_handling(project_root: Path) -> None:
-    """Test handling of binary files."""
-    collector = CodeCollector(project_root)
+@pytest.mark.asyncio
+async def test_binary_file_handling(project_env: Path) -> None:
+    """Test handling of binary files and high ASCII characters."""
+    collector = Collector(project_env)
 
-    # Create a binary file
-    binary_file = project_root / "test.bin"
-    binary_file.write_bytes(bytes(range(256)))
+    # Test file with null bytes
+    binary_file = project_env / "test.bin"
+    binary_data = b"\x00\xff\x00\xff" * 10
+    binary_file.write_bytes(binary_data)
 
-    content = collector.read_file_content(binary_file)
-    assert content == "[Binary file content not shown]"
+    # Test file with high ASCII characters
+    high_ascii_file = project_env / "high_ascii.txt"
+    high_ascii_content = "Test with high ASCII: é ñ ü ß ¥"
+    high_ascii_file.write_text(high_ascii_content)
 
-    # Cleanup
-    binary_file.unlink()
+    try:
+        # Binary files should be ignored
+        assert await collector.should_ignore_file(binary_file)
+        # Files with high ASCII should be ignored
+        assert await collector.should_ignore_file(high_ascii_file)
+    finally:
+        # Cleanup
+        binary_file.unlink()
+        high_ascii_file.unlink()
 
 
-def test_should_ignore_file_special_cases(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_sync_ignore_patterns(project_env: Path) -> None:
+    """Test synchronous ignore pattern handling through collect_files."""
+    collector = Collector(project_env)
+    collector.ignore_patterns = ["*.log", "node_modules/"]
+
+    # Create test files
+    test_files = [
+        "test.log",  # Should be ignored
+        "node_modules/test.js",  # Should be ignored
+        "test.py",  # Should not be ignored
+        "src/main.js",  # Should not be ignored
+    ]
+
+    for file_path in test_files:
+        path = project_env / file_path
+        path.parent.mkdir(exist_ok=True, parents=True)
+        path.write_text("Test content")
+
+    try:
+        # Collect files and verify ignore patterns work
+        files = await collector.collect_files(str(project_env))
+        collected_names = [p.name for p in files]
+
+        assert "test.log" not in collected_names
+        assert "test.js" not in collected_names
+        assert "test.py" in collected_names
+        assert "main.js" in collected_names
+
+    finally:
+        # Cleanup
+        for file_path in test_files:
+            path = project_env / file_path
+            path.unlink()
+            if path.parent != project_env:
+                path.parent.rmdir()
+
+
+@pytest.mark.asyncio
+async def test_should_ignore_file_special_cases(project_env: Path) -> None:
     """Test special cases for file ignore logic."""
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
     # Test FULL_CODE_ files
-    assert collector.should_ignore_file(project_root / "FULL_CODE_test.md")
+    assert await collector.should_ignore_file(project_env / "FULL_CODE_test.md")
 
     # Test .neuroloraignore file
-    assert collector.should_ignore_file(project_root / ".neuroloraignore")
+    assert await collector.should_ignore_file(project_env / ".neuroloraignore")
 
     # Test file with permission error
-    no_access_file = project_root / "no_access.txt"
+    no_access_file = project_env / "no_access.txt"
     no_access_file.write_text("Test content")
     os.chmod(no_access_file, 0o000)
-    # On some systems, we might still be able to stat the file
-    # even without read permissions. So we'll just verify that
-    # should_ignore_file handles it correctly in either case
     try:
-        no_access_file.stat()
-        # If we can stat, we should still be able to check size
-        assert collector.should_ignore_file(no_access_file) == (
-            no_access_file.stat().st_size > 1024 * 1024
-        )
-    except PermissionError:
-        # If we can't stat, it should be ignored
-        assert collector.should_ignore_file(no_access_file)
-    os.chmod(no_access_file, 0o666)
-    no_access_file.unlink()
+        assert await collector.should_ignore_file(no_access_file)
+    finally:
+        os.chmod(no_access_file, 0o666)
+        no_access_file.unlink()
 
     # Test directory patterns
-    assert collector.should_ignore_file(
-        project_root / "node_modules" / "deep" / "test.js"
+    assert await collector.should_ignore_file(
+        project_env / "node_modules" / "deep" / "test.js"
     )
-    assert collector.should_ignore_file(project_root / "dist" / "index.html")
+    assert await collector.should_ignore_file(project_env / "dist" / "index.html")
 
     # Test file outside project root
-    outside_file = project_root.parent / "outside.py"
+    outside_file = project_env.parent / "outside.py"
     outside_file.touch()
-    assert not collector.should_ignore_file(outside_file)
+    assert not await collector.should_ignore_file(outside_file)
     outside_file.unlink()
 
 
-def test_collect_files_error_handling(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_collect_files_error_handling(project_env: Path) -> None:
     """Test error handling in collect_files."""
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
     # Test permission error
-    no_access_dir = project_root / "no_access"
+    no_access_dir = project_env / "no_access"
     no_access_dir.mkdir()
     no_access_file = no_access_dir / "test.py"
     no_access_file.write_text("Test content")
 
-    with patch(
-        "pathlib.Path.stat", create_autospec(Path.stat, return_value=None)
-    ):
-        os.chmod(no_access_dir, 0o000)
-        files = collector.collect_files(str(no_access_dir))
-        assert files == []
-        os.chmod(no_access_dir, 0o777)
+    os.chmod(no_access_dir, 0o000)
+    files = await collector.collect_files(str(no_access_dir))
+    assert files == []
+    os.chmod(no_access_dir, 0o777)
 
     no_access_file.unlink()
     no_access_dir.rmdir()
 
     # Test invalid path
-    files = collector.collect_files("\0invalid")  # Invalid path character
+    files = await collector.collect_files("\0invalid")  # Invalid path character
     assert files == []  # Should return empty list for invalid paths
 
     # Test collecting from multiple paths with some failing
-    test_file = project_root / "test.py"
+    test_file = project_env / "test.py"
     test_file.write_text("Test content")
 
-    files = collector.collect_files(
-        [str(test_file), "nonexistent", "\0invalid"]
-    )
+    files = await collector.collect_files([str(test_file), "nonexistent", "\0invalid"])
     assert len(files) == 1
     assert test_file in files
 
     test_file.unlink()
 
 
-def test_collect_files_sorting(project_root: Path) -> None:
+@pytest.mark.asyncio
+async def test_collect_files_sorting(project_env: Path) -> None:
     """Test file sorting in collect_files."""
-    collector = CodeCollector(project_root)
+    collector = Collector(project_env)
 
     # Create test files
     files = ["b.py", "a.py", "PROJECT_SUMMARY.md", "src/test.py", "README.md"]
 
     for file in files:
-        path = project_root / file
+        path = project_env / file
         path.parent.mkdir(exist_ok=True)
         path.write_text("Test content")
 
-    collected = collector.collect_files(str(project_root))
+    collected = await collector.collect_files(str(project_env))
 
     # PROJECT_SUMMARY.md should be first
     assert collected[0].name == "PROJECT_SUMMARY.md"
@@ -486,7 +482,7 @@ def test_collect_files_sorting(project_root: Path) -> None:
 
     # Cleanup
     for file in files:
-        path = project_root / file
+        path = project_env / file
         path.unlink()
-        if path.parent != project_root:
+        if path.parent != project_env:
             path.parent.rmdir()

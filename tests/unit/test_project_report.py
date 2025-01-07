@@ -6,9 +6,8 @@ from typing import Generator
 
 import pytest
 
-from mcpneurolora.tools.project_structure_reporter import (
-    ProjectStructureReporter,
-)
+from mcpneurolora.tools.reporter import Reporter
+from mcpneurolora.utils import async_io
 
 
 @pytest.fixture
@@ -24,33 +23,26 @@ def temp_project(tmp_path: Path) -> Generator[Path, None, None]:
     yield tmp_path
 
 
-def test_should_ignore(temp_project: Path) -> None:
+@pytest.mark.asyncio
+async def test_should_ignore(temp_project: Path) -> None:
     """Test file/directory ignore patterns."""
-    reporter = ProjectStructureReporter(
+    reporter = Reporter(
         root_dir=temp_project,
         ignore_patterns=["*.bin", "*.pyc"],
     )
 
-    assert reporter.should_ignore(temp_project / "binary.bin")
-    assert reporter.should_ignore(temp_project / "cache.pyc")
-    assert not reporter.should_ignore(temp_project / "src" / "main.py")
+    assert await reporter.should_ignore(temp_project / "binary.bin")
+    assert await reporter.should_ignore(temp_project / "cache.pyc")
+    assert not await reporter.should_ignore(temp_project / "src" / "main.py")
 
 
-def test_count_lines(temp_project: Path) -> None:
-    """Test line counting functionality."""
-    reporter = ProjectStructureReporter(root_dir=temp_project)
-
-    assert reporter.count_lines(temp_project / "src" / "main.py") == 2
-    assert reporter.count_lines(temp_project / "README.md") == 1
-    assert reporter.count_lines(temp_project / "binary.bin") == 0
-
-
-def test_analyze_file(temp_project: Path) -> None:
+@pytest.mark.asyncio
+async def test_analyze_file(temp_project: Path) -> None:
     """Test file analysis functionality."""
-    reporter = ProjectStructureReporter(root_dir=temp_project)
+    reporter = Reporter(root_dir=temp_project)
 
     # Test normal file
-    main_data = reporter.analyze_file(temp_project / "src" / "main.py")
+    main_data = await reporter.analyze_file(temp_project / "src" / "main.py")
     assert main_data["path"] == os.path.join("src", "main.py")
     assert main_data["lines"] == 2
     assert not main_data["is_large"]
@@ -58,7 +50,7 @@ def test_analyze_file(temp_project: Path) -> None:
     assert not main_data["error"]
 
     # Test large file
-    utils_data = reporter.analyze_file(temp_project / "src" / "utils.py")
+    utils_data = await reporter.analyze_file(temp_project / "src" / "utils.py")
     assert utils_data["path"] == os.path.join("src", "utils.py")
     assert utils_data["lines"] == 400
     assert not utils_data["is_large"]  # Not large by size
@@ -66,7 +58,7 @@ def test_analyze_file(temp_project: Path) -> None:
     assert not utils_data["error"]
 
     # Test binary file
-    binary_data = reporter.analyze_file(temp_project / "binary.bin")
+    binary_data = await reporter.analyze_file(temp_project / "binary.bin")
     assert binary_data["path"] == "binary.bin"
     assert binary_data["lines"] == 0
     assert not binary_data["is_large"]
@@ -74,14 +66,15 @@ def test_analyze_file(temp_project: Path) -> None:
     assert not binary_data["error"]
 
 
-def test_analyze_project_structure(temp_project: Path) -> None:
+@pytest.mark.asyncio
+async def test_analyze_project_structure(temp_project: Path) -> None:
     """Test project structure analysis."""
-    reporter = ProjectStructureReporter(
+    reporter = Reporter(
         root_dir=temp_project,
         ignore_patterns=["*.bin"],
     )
 
-    report_data = reporter.analyze_project_structure()
+    report_data = await reporter.analyze_project_structure()
 
     assert len(report_data["files"]) == 3  # main.py, utils.py, README.md
     assert report_data["total_lines"] > 0
@@ -90,16 +83,15 @@ def test_analyze_project_structure(temp_project: Path) -> None:
     assert report_data["error_files"] == 0
 
 
-def test_generate_markdown_report(temp_project: Path) -> None:
+@pytest.mark.asyncio
+async def test_generate_report(temp_project: Path) -> None:
     """Test markdown report generation."""
-    reporter = ProjectStructureReporter(root_dir=temp_project)
-    report_data = reporter.analyze_project_structure()
+    reporter = Reporter(root_dir=temp_project)
+    output_path = await reporter.generate_report()
 
-    output_path = temp_project / "report.md"
-    reporter.generate_markdown_report(report_data, output_path)
-
+    assert output_path is not None
     assert output_path.exists()
-    content = output_path.read_text()
+    content = await async_io.read_file(output_path)
     assert "# Project Structure Report" in content
     assert "## Project Tree" in content
     assert "## Summary" in content

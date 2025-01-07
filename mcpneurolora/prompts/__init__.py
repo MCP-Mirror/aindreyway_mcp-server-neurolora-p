@@ -57,9 +57,7 @@ async def commands_prompt() -> str:
     return load_prompt("commands")
 
 
-mcp._prompt_manager.add_prompt(
-    Prompt.from_function(commands_prompt, name="commands")
-)
+mcp._prompt_manager.add_prompt(Prompt.from_function(commands_prompt, name="commands"))
 
 
 @mcp.prompt()
@@ -80,7 +78,11 @@ async def route_command(text: str) -> RouterResponse:
     # This implementation will be provided by the MCP prompt decorator
     # but we need to return something to satisfy the type checker
     return RouterResponse(
-        command="improve", confidence=0.0, reason="Placeholder implementation"
+        command_type=CommandType.IMPROVE,
+        confidence=0.0,
+        args={},
+        reason="Placeholder implementation",
+        command="improve",
     )
 
 

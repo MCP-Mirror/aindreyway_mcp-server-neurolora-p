@@ -8,9 +8,7 @@ from typing import Optional, Union
 logger = logging.getLogger(__name__)
 
 
-def validate_path(
-    path: Union[str, Path], base_dir: Optional[Path] = None
-) -> Path:
+def validate_path(path: Union[str, Path], base_dir: Optional[Path] = None) -> Path:
     """Validate and sanitize file path.
 
     This function ensures that the provided path:
@@ -27,7 +25,6 @@ def validate_path(
 
     Raises:
         ValueError: If path is invalid or outside base directory
-        TypeError: If path is not a string or Path object
     """
     try:
         # Convert to Path and resolve to absolute path
@@ -39,9 +36,7 @@ def validate_path(
             try:
                 path.relative_to(base_dir)
             except ValueError:
-                raise ValueError(
-                    f"Path {path} is outside base directory {base_dir}"
-                )
+                raise ValueError(f"Path {path} is outside base directory {base_dir}")
 
         return path
 
@@ -102,7 +97,7 @@ def is_safe_path(
         # If allowed_dirs provided, check if path is in one of them
         if allowed_dirs:
             return any(
-                str(path).startswith(str(allowed_dir))
+                str(path).startswith(str(allowed_dir.resolve()))
                 for allowed_dir in allowed_dirs
             )
 

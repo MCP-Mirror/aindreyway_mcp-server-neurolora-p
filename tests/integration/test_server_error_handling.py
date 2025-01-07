@@ -3,14 +3,42 @@
 import logging
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
+from typing import Any, List
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
 from mcpneurolora.server import run_terminal_server
 
-# Disable logging for tests
-logging.getLogger("mcpneurolora.server").setLevel(logging.CRITICAL)
+# Get logger for capturing messages
+server_logger = logging.getLogger("mcpneurolora.server")
+terminal_logger = logging.getLogger("mcpneurolora.terminal")
+
+
+class LogCaptureHandler(logging.Handler):
+    """Custom handler to capture log messages."""
+
+    def __init__(self) -> None:
+        """Initialize handler."""
+        super().__init__()
+        self.messages: List[str] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        """Store log message."""
+        self.messages.append(record.getMessage())
+
+
+@pytest.fixture
+def log_capture() -> Generator[LogCaptureHandler, None, None]:
+    """Fixture to capture log messages."""
+    handler = LogCaptureHandler()
+    server_logger.addHandler(handler)
+    terminal_logger.addHandler(handler)
+    server_logger.setLevel(logging.DEBUG)
+    terminal_logger.setLevel(logging.DEBUG)
+    yield handler
+    server_logger.removeHandler(handler)
+    terminal_logger.removeHandler(handler)
 
 
 class MockTerminal:
@@ -79,7 +107,7 @@ class ToolMock(AsyncMock):
 @pytest.fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
     """Mock FastMCP server."""
-    with patch("mcpneurolora.server.FastMCP") as mock:
+    with patch("mcpneurolora.server.Server") as mock:
         mock_server = MagicMock()
         mock_server.name = "neurolora"
         mock_server.tools = {
@@ -168,19 +196,13 @@ async def test_code_collector_error_handling(
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_value_error(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test error handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
-
-    # Mock print function to capture output
-    prints: list[str] = []
-
-    def print_mock(x: object) -> None:
-        prints.append(str(x))
-
-    monkeypatch.setattr("builtins.print", print_mock)
 
     # Mock input to raise ValueError
     input_mock = MagicMock(side_effect=[ValueError("Invalid input"), "exit"])
@@ -190,24 +212,24 @@ async def test_terminal_server_value_error(
     await run_terminal_server()
 
     # Verify error handling
-    assert any("Value error: Invalid input" in msg for msg in prints)
-    assert any("Exiting terminal server" in msg for msg in prints)
+    assert any(
+        "ERROR Value error: Invalid input" in msg for msg in log_capture.messages
+    )
+    assert any(
+        "ERROR Value error in terminal server: Invalid input" in msg
+        for msg in log_capture.messages
+    )
+    assert any("INFO Terminal server stopped" in msg for msg in log_capture.messages)
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_type_error(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test type error handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
-
-    # Mock print function to capture output
-    prints: list[str] = []
-
-    def print_mock(x: object) -> None:
-        prints.append(str(x))
-
-    monkeypatch.setattr("builtins.print", print_mock)
 
     # Mock input to raise TypeError
     input_mock = MagicMock(side_effect=[TypeError("Invalid type"), "exit"])
@@ -217,24 +239,22 @@ async def test_terminal_server_type_error(
     await run_terminal_server()
 
     # Verify error handling
-    assert any("Type error: Invalid type" in msg for msg in prints)
-    assert any("Exiting terminal server" in msg for msg in prints)
+    assert any("ERROR Type error: Invalid type" in msg for msg in log_capture.messages)
+    assert any(
+        "ERROR Type error in terminal server: Invalid type" in msg
+        for msg in log_capture.messages
+    )
+    assert any("INFO Terminal server stopped" in msg for msg in log_capture.messages)
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_empty_input(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test empty input handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
-
-    # Mock print function to capture output
-    prints: list[str] = []
-
-    def print_mock(x: object) -> None:
-        prints.append(str(x))
-
-    monkeypatch.setattr("builtins.print", print_mock)
 
     # Mock input to return empty string then exit
     input_mock = MagicMock(side_effect=["", "exit"])
@@ -244,24 +264,19 @@ async def test_terminal_server_empty_input(
     await run_terminal_server()
 
     # Verify error handling
-    assert not any("Invalid command format" in msg for msg in prints)
-    assert any("Exiting terminal server" in msg for msg in prints)
+    assert any("INFO Empty input received" in msg for msg in log_capture.messages)
+    assert any("WARNING Empty input" in msg for msg in log_capture.messages)
+    assert any("INFO Terminal server stopped" in msg for msg in log_capture.messages)
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_invalid_command(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test invalid command format handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
-
-    # Mock print function to capture output
-    prints: list[str] = []
-
-    def print_mock(x: object) -> None:
-        prints.append(str(x))
-
-    monkeypatch.setattr("builtins.print", print_mock)
 
     # Mock terminal to return None for parse_request
     terminal = MockTerminal()
@@ -277,21 +292,25 @@ async def test_terminal_server_invalid_command(
         await run_terminal_server()
 
         # Verify error handling
-        assert any("Invalid command format" in msg for msg in prints)
-        assert any("Exiting terminal server" in msg for msg in prints)
+        assert any(
+            "ERROR Method 'invalid' not found" in msg for msg in log_capture.messages
+        )
+        assert any(
+            "INFO Terminal server stopped" in msg for msg in log_capture.messages
+        )
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_unknown_command(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test unknown command handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
 
     # Mock JsonRpcTerminal class
-    with patch(
-        "mcpneurolora.server.JsonRpcTerminal"
-    ) as mock_terminal_class:
+    with patch("mcpneurolora.server.JsonRpcTerminal") as mock_terminal_class:
         terminal_instance = MockTerminal()
         mock_terminal_class.return_value = terminal_instance
 
@@ -299,29 +318,24 @@ async def test_terminal_server_unknown_command(
         input_mock = MagicMock(side_effect=["unknown_command", "exit"])
         monkeypatch.setattr("builtins.input", input_mock)
 
-        # Mock print function to capture output
-        prints: list[str] = []
-
-        def print_mock(x: object) -> None:
-            prints.append(str(x))
-
-        monkeypatch.setattr("builtins.print", print_mock)
-
         # Run terminal server
         await run_terminal_server()
 
         # Verify error handling
-        error_msg = "Error: Method 'unknown_command' not found"
-        has_error = any(error_msg in msg for msg in prints)
-        has_exit = any("Exiting terminal server" in msg for msg in prints)
-
-        assert has_error, f"Expected '{error_msg}' in output"
-        assert has_exit, "Expected 'Exiting terminal server' message"
+        assert any(
+            "ERROR Method 'unknown_command' not found" in msg
+            for msg in log_capture.messages
+        )
+        assert any(
+            "INFO Terminal server stopped" in msg for msg in log_capture.messages
+        )
 
 
 @pytest.mark.asyncio
+@pytest.mark.timeout(5)
 async def test_terminal_server_keyboard_interrupt(
     monkeypatch: pytest.MonkeyPatch,
+    log_capture: LogCaptureHandler,
 ) -> None:
     """Test keyboard interrupt handling in terminal server."""
     monkeypatch.setenv("MCP_PROJECT_ROOT", "/tmp")
@@ -330,16 +344,11 @@ async def test_terminal_server_keyboard_interrupt(
     input_mock = MagicMock(side_effect=KeyboardInterrupt)
     monkeypatch.setattr("builtins.input", input_mock)
 
-    # Mock print function to capture output
-    prints: list[str] = []
-
-    def print_mock(x: object) -> None:
-        prints.append(str(x))
-
-    monkeypatch.setattr("builtins.print", print_mock)
-
     # Run terminal server
     await run_terminal_server()
 
     # Verify error handling
-    assert any("Exiting terminal server" in msg for msg in prints)
+    assert any(
+        "INFO Keyboard interrupt received" in msg for msg in log_capture.messages
+    )
+    assert any("INFO Terminal server stopped" in msg for msg in log_capture.messages)

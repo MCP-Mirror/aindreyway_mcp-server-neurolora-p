@@ -73,8 +73,8 @@ class ToolMock(AsyncMock):
 
 @pytest.fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
-    """Mock FastMCP server."""
-    with patch("mcpneurolora.server.FastMCP") as mock:
+    """Mock Server instance."""
+    with patch("mcpneurolora.server.Server") as mock:
         mock_server = MagicMock()
         mock_server.name = "neurolora"
         mock_server.tools = {"project_structure_reporter": ToolMock()}

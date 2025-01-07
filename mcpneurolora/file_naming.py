@@ -71,9 +71,7 @@ def format_filename(
     # Format title if provided
     if title:
         title_slug = slugify(title)
-        return (
-            f"{file_type.value}{provider_str}_{timestamp_str}_{title_slug}.md"
-        )
+        return f"{file_type.value}{provider_str}_{timestamp_str}_{title_slug}.md"
 
     # For files without title (like project reports)
     return f"{file_type.value}{provider_str}_{timestamp_str}.md"

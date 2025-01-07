@@ -106,13 +106,50 @@ When implementing any rule from this document, explicitly reference it in your o
 - Use asynchronous operations for I/O-bound tasks.
 - Regularly profile the application to identify and address performance bottlenecks.
 
-## 14. Compliance and Standards
+## 14. Python Code Style and Formatting Standards
+
+- Follow Black code style with line length of 88 characters
+- Use isort with Black profile for import sorting
+- Follow strict type checking with mypy
+- Maintain consistent code structure:
+  - Two blank lines before top-level classes and functions
+  - One blank line before class methods
+  - One blank line at end of file
+- Use type hints for all function arguments and return values
+- Follow error handling patterns:
+  - Use specific exception types
+  - Include context in error messages
+  - Log errors with appropriate severity levels
+- Format docstrings:
+  - Use triple double-quotes for all docstrings
+  - Include Args, Returns, and Raises sections
+  - Align parameter descriptions
+  - Keep descriptions concise and clear
+- Follow flake8 guidelines with exceptions:
+  - E203 (whitespace before ':') - conflicts with Black
+  - W503 (line break before binary operator) - conflicts with Black
+
+## 15. Compliance and Standards
 
 - Ensure the application complies with relevant data protection regulations (e.g., GDPR, CCPA).
 - Follow accessibility standards (WCAG) to make the application usable by people with disabilities.
 - Adhere to industry-standard coding conventions and style guides.
 
-## 15. Documentation
+## 16. VSCode Configuration
+
+- Configure VSCode settings for automatic formatting:
+  - Enable formatOnSave for Python files
+  - Use Black as the default formatter
+  - Enable organizeImports on save
+  - Set rulers at 88 characters
+  - Enable strict type checking
+- Configure file handling:
+  - Set autoSave to onFocusChange
+  - Enable insertFinalNewline
+  - Set encoding to utf8
+  - Set EOL to \n
+
+## 17. Documentation
 
 - Maintain up-to-date API documentation.
 - Provide clear, step-by-step guides for setup and deployment.

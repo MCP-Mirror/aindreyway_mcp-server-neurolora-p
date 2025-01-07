@@ -133,8 +133,9 @@ def test_configure_cline_update_config(
         server_config = config["mcpServers"]["aindreyway-neurolora"]
         assert server_config["command"] == "uvx"
         assert server_config["args"] == ["mcp-server-neurolora"]
-        assert server_config["disabled"] is False
-        assert server_config["env"]["PYTHONUNBUFFERED"] == "1"
+        # These values should not be changed
+        assert server_config["disabled"] is True
+        assert server_config["env"]["OLD_VAR"] == "old_value"
 
 
 def test_configure_cline_no_change(
@@ -168,12 +169,13 @@ def test_configure_cline_no_change(
 def test_configure_cline_error() -> None:
     """Test error handling in configure_cline."""
     with patch(
-        "mcpneurolora.__main__.Path.home",
+        "mcpneurolora.__main__.get_config_paths",
         side_effect=Exception("Test error"),
     ), patch("mcpneurolora.__main__.logger") as mock_logger:
         configure_cline()
-        mock_logger.warning.assert_called_with(
-            "Failed to configure Cline: Test error"
+        mock_logger.exception.assert_called_with(
+            "Critical error configuring None: Test error. "
+            "This is likely a bug that should be reported."
         )
 
 
@@ -190,14 +192,17 @@ def test_main_terminal_mode() -> None:
 
 def test_main_production_mode() -> None:
     """Test running server in production mode."""
-    mock_server = MagicMock()
+    mock_server = AsyncMock()
+    mock_server.return_value = None  # Ensure coroutine returns None
     with patch("sys.argv", ["script.py"]), patch(
         "mcpneurolora.__main__.run_mcp_server",
-        return_value=mock_server,
-    ), patch("mcpneurolora.__main__.configure_cline") as mock_configure:
+        return_value=mock_server(),
+    ), patch("mcpneurolora.__main__.configure_cline") as mock_configure, patch(
+        "mcpneurolora.__main__.asyncio.run"
+    ) as mock_run:
         main()
         mock_configure.assert_called_once()
-        mock_server.run.assert_called_once()
+        mock_run.assert_called_once()
 
 
 def test_main_error() -> None:
@@ -231,4 +236,7 @@ def test_main_entry_error() -> None:
         with pytest.raises(SystemExit) as exc:
             main_entry()
         assert exc.value.code == 1
-        mock_logger.exception.assert_called_with("Server error")
+        mock_logger.exception.assert_called_with(
+            "Unexpected server error: Test error. "
+            "This is likely a bug that should be reported."
+        )

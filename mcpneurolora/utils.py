@@ -1,7 +1,7 @@
 """Utility functions and classes."""
 
 from .utils.file_lock import file_lock
-from .utils.input_validation import validate_path, sanitize_filename
+from .utils.input_validation import sanitize_filename, validate_path
 from .utils.progress import ProgressTracker
 from .utils.token_counter import count_tokens, get_token_limit
 from .utils.validation import (

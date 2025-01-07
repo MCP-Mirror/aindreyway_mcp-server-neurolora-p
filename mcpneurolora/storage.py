@@ -12,7 +12,7 @@ try:
     import appdirs
 except ImportError:
     raise RuntimeError(
-        "appdirs package is required. Please install it with: pip install appdirs"
+        "appdirs package is required.\n" "Please install it with: pip install appdirs"
     )
 
 from .log_utils import LogCategory, get_logger
@@ -48,9 +48,7 @@ class StorageManager:
             subproject_id: Optional subproject identifier.
                         If provided, will be appended to project name.
         """
-        self.project_root = (
-            validate_path(project_root) if project_root else Path.cwd()
-        )
+        self.project_root = validate_path(project_root) if project_root else Path.cwd()
 
         # Get project name and handle subproject
         base_name = self.project_root.name
@@ -60,19 +58,22 @@ class StorageManager:
         else:
             self.project_name = base_name
 
-        # Get platform-specific user data directory
-        # On macOS: ~/Library/Application Support/mcp/.mcp-docs
-        # On Linux: ~/.local/share/mcp/.mcp-docs
-        # On Windows: C:\Users\<username>\AppData\Local\modelcontextprotocol\mcp\.mcp-docs
-        self.mcp_docs_dir = (
-            Path(appdirs.user_data_dir(APP_NAME, APP_AUTHOR)) / ".mcp-docs"
-        )
+        # Get platform-specific user data directory:
+        # - macOS: ~/Library/Application Support/mcp/.mcp-docs
+        # - Linux: ~/.local/share/mcp/.mcp-docs
+        # - Windows: %APPDATA%/modelcontextprotocol/mcp/.mcp-docs
+        data_dir = appdirs.user_data_dir(APP_NAME, APP_AUTHOR)
+        self.mcp_docs_dir = Path(data_dir) / ".mcp-docs"
         try:
             self.mcp_docs_dir.mkdir(parents=True, exist_ok=True)
             logger.info("Using platform data directory: %s", self.mcp_docs_dir)
-        except (PermissionError, OSError) as e:
-            logger.error("Failed to create data directory: %s", str(e))
-            raise RuntimeError(f"Failed to create data directory: {str(e)}")
+        except (PermissionError, OSError) as err:
+            logger.error(
+                "Failed to create data directory: %s\n"
+                "Please check directory permissions and disk space.",
+                str(err),
+            )
+            raise RuntimeError(f"Failed to create data directory: {str(err)}")
 
         # Setup project paths
         self.project_docs_dir = self.mcp_docs_dir / self.project_name
@@ -123,8 +124,26 @@ class StorageManager:
                 raise RuntimeError(
                     f"Failed to create directory: {self.project_docs_dir}"
                 )
-        except Exception as e:
-            logger.error("Error creating directories: %s", str(e))
+        except PermissionError as err:
+            logger.error(
+                "Permission denied creating directories: %s\n"
+                "Please check directory permissions.",
+                str(err),
+            )
+            raise
+        except OSError as err:
+            logger.error(
+                "System error creating directories: %s\n"
+                "This may indicate disk space or I/O issues.",
+                str(err),
+            )
+            raise
+        except (TypeError, ValueError) as err:
+            logger.error(
+                "Invalid path or filename: %s\n"
+                "Please check path components are valid.",
+                str(err),
+            )
             raise
 
     def _create_symlinks(self) -> None:
@@ -137,20 +156,33 @@ class StorageManager:
                 ".neurolora",
             )
             # Verify symlink is created and valid
-            if (
-                not self.neurolora_link.exists()
-                or not self.neurolora_link.is_symlink()
-            ):
-                raise RuntimeError(
-                    f"Failed to create symlink: {self.neurolora_link}"
-                )
+            if not self.neurolora_link.exists() or not self.neurolora_link.is_symlink():
+                raise RuntimeError(f"Failed to create symlink: {self.neurolora_link}")
 
             logger.info(
                 "Symlink created and verified: %s",
                 self.neurolora_link,
             )
-        except Exception as e:
-            logger.error("Error creating symlinks: %s", str(e))
+        except PermissionError as err:
+            logger.error(
+                "Permission denied creating symlink: %s\n"
+                "Please check file permissions.",
+                str(err),
+            )
+            raise
+        except OSError as err:
+            logger.error(
+                "System error creating symlink: %s\n"
+                "This may indicate filesystem limitations.",
+                str(err),
+            )
+            raise
+        except (TypeError, ValueError) as err:
+            logger.error(
+                "Invalid path for symlink: %s\n"
+                "Please check path components are valid.",
+                str(err),
+            )
             raise
 
     def _create_or_update_symlink(
@@ -175,9 +207,7 @@ class StorageManager:
             target_path.mkdir(parents=True, exist_ok=True)
 
             # Create relative symlink
-            relative_target = os.path.relpath(
-                target_path.resolve(), link_path.parent
-            )
+            relative_target = os.path.relpath(target_path.resolve(), link_path.parent)
             logger.debug(
                 "Creating symlink: %s -> %s (relative: %s)",
                 link_path,
@@ -189,15 +219,11 @@ class StorageManager:
                 if not link_path.is_symlink():
                     logger.warning("Removing non-symlink %s", link_name)
                     link_path.unlink()
-                    link_path.symlink_to(
-                        relative_target, target_is_directory=True
-                    )
+                    link_path.symlink_to(relative_target, target_is_directory=True)
                 elif link_path.resolve() != target_path:
                     logger.warning("Updating incorrect %s symlink", link_name)
                     link_path.unlink()
-                    link_path.symlink_to(
-                        relative_target, target_is_directory=True
-                    )
+                    link_path.symlink_to(relative_target, target_is_directory=True)
             else:
                 link_path.symlink_to(relative_target, target_is_directory=True)
 
@@ -205,19 +231,32 @@ class StorageManager:
             if not link_path.exists():
                 raise RuntimeError(f"Symlink was not created: {link_path}")
             if not link_path.is_symlink():
-                raise RuntimeError(
-                    f"Path exists but is not a symlink: {link_path}"
-                )
+                raise RuntimeError(f"Path exists but is not a symlink: {link_path}")
             resolved = link_path.resolve()
             if resolved != target_path:
-                msg = (
-                    f"Symlink points to wrong target: "
-                    f"{resolved} != {target_path}"
-                )
+                msg = f"Symlink points to wrong target: " f"{resolved} != {target_path}"
                 raise RuntimeError(msg)
 
-        except Exception as e:
-            logger.error("Error creating symlink: %s", str(e))
+        except PermissionError as err:
+            logger.error(
+                "Permission denied managing symlink: %s\n"
+                "Please check file permissions.",
+                str(err),
+            )
+            raise
+        except OSError as err:
+            logger.error(
+                "System error managing symlink: %s\n"
+                "This may indicate filesystem limitations.",
+                str(err),
+            )
+            raise
+        except (TypeError, ValueError) as err:
+            logger.error(
+                "Invalid path for symlink operation: %s\n"
+                "Please check path components are valid.",
+                str(err),
+            )
             raise
 
     def _create_template_file(
@@ -244,46 +283,64 @@ class StorageManager:
             output_file = (output_dir or self.project_docs_dir) / output_name
             if not output_file.exists():
                 # Copy from template
-                template_file = (
-                    Path(__file__).parent / "templates" / template_name
-                )
+                template_file = Path(__file__).parent / "templates" / template_name
                 if template_file.exists():
                     try:
                         with file_lock(output_file):
                             # Read template content first
-                            with open(
-                                template_file, "r", encoding="utf-8"
-                            ) as src:
+                            with open(template_file, "r", encoding="utf-8") as src:
                                 content = src.read()
                             # Then write to output file
-                            with open(
-                                output_file, "w", encoding="utf-8"
-                            ) as dst:
+                            with open(output_file, "w", encoding="utf-8") as dst:
                                 dst.write(content)
                     except PermissionError:
                         logger.error(
                             "Permission denied accessing files: "
-                            f"{output_file} or {template_file}"
+                            f"{output_file} or {template_file}\n"
+                            "Please check file permissions."
                         )
                         raise
                     except UnicodeDecodeError:
                         logger.error(
                             "Invalid file encoding in template: "
-                            f"{template_file}"
+                            f"{template_file}\n"
+                            "Please ensure template files are UTF-8 encoded."
                         )
                         raise
-                    except IOError as e:
-                        logger.error("I/O error with files: %s", str(e))
+                    except IOError as err:
+                        logger.error(
+                            "I/O error with files: %s\n"
+                            "This may indicate disk or system issues.",
+                            str(err),
+                        )
                         raise
                 else:
-                    logger.warning(
-                        "Template file not found: %s", template_file
-                    )
-        except (PermissionError, UnicodeDecodeError, IOError) as e:
-            logger.error("File system error with files: %s", str(e))
+                    logger.warning("Template file not found: %s", template_file)
+        except (TypeError, ValueError) as err:
+            logger.error(
+                "Invalid filename or path: %s\n"
+                "Please ensure filenames contain valid characters.",
+                str(err),
+            )
             raise
-        except Exception as e:
-            logger.error("Unexpected error with files: %s", str(e))
+        except OSError as err:
+            if isinstance(err, PermissionError):
+                logger.error(
+                    "Permission denied: %s\n" "Please check file permissions.",
+                    str(err),
+                )
+            elif isinstance(err, UnicodeDecodeError):
+                logger.error(
+                    "Invalid file encoding: %s\n"
+                    "Please ensure files are UTF-8 encoded.",
+                    str(err),
+                )
+            else:
+                logger.error(
+                    "Operating system error: %s\n"
+                    "This may indicate disk or system issues.",
+                    str(err),
+                )
             raise
 
     def _create_ignore_file(self) -> None:

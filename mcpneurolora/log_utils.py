@@ -95,9 +95,7 @@ root_logger.handlers = []  # Remove any existing handlers
 root_logger.addHandler(logging.NullHandler())  # Add null handler
 
 
-def get_logger(
-    name: str, category: Optional[LogCategory] = None
-) -> logging.Logger:
+def get_logger(name: str, category: Optional[LogCategory] = None) -> logging.Logger:
     """Get a logger with the specified name and category.
 
     Args:
@@ -115,9 +113,7 @@ def get_logger(
     # Configure logger with category-specific levels
     if category:
         if category == LogCategory.CONFIG:
-            logger.setLevel(
-                logging.WARNING
-            )  # Show only important config messages
+            logger.setLevel(logging.WARNING)  # Show only important config messages
         elif category == LogCategory.STORAGE:
             logger.setLevel(logging.INFO)  # Show main storage operations
         elif category == LogCategory.TOOLS:
@@ -155,16 +151,10 @@ def get_logger(
         def add_category(record: logging.LogRecord) -> bool:
             record.category = category.value
             # Filter out debug messages for storage operations
-            if (
-                category == LogCategory.STORAGE
-                and record.levelno < logging.INFO
-            ):
+            if category == LogCategory.STORAGE and record.levelno < logging.INFO:
                 return False
             # Filter out repetitive config messages
-            if (
-                category == LogCategory.CONFIG
-                and record.levelno < logging.WARNING
-            ):
+            if category == LogCategory.CONFIG and record.levelno < logging.WARNING:
                 return False
             return True
 
@@ -189,6 +179,43 @@ def configure_mcp_logging(level: int = logging.WARNING) -> None:
 
     for module in mcp_modules:
         logging.getLogger(module).setLevel(level)
+
+
+def configure_test_logging() -> None:
+    """Configure logging for test environment.
+
+    This function sets stricter logging levels during test execution to reduce noise:
+    - Sets WARNING level for most categories
+    - Disables propagation to root logger
+    - Removes timestamp from log format
+    - Filters out non-essential messages
+    """
+    # Set strict levels for all categories
+    for category in LogCategory:
+        logger = get_logger(f"test.{category.value.lower()}", category)
+        logger.setLevel(logging.WARNING)
+        logger.propagate = False
+
+        # Remove existing handlers
+        logger.handlers = []
+
+        # Add test-specific handler
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(
+            ColorFormatter(
+                fmt="%(message)s",  # No timestamp in tests
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        )
+        logger.addHandler(handler)
+
+    # Configure MCP logging
+    configure_mcp_logging(logging.ERROR)  # More strict for MCP modules
+
+    # Disable root logger
+    root_logger = logging.getLogger()
+    root_logger.handlers = []
+    root_logger.addHandler(logging.NullHandler())
 
 
 # Example usage:

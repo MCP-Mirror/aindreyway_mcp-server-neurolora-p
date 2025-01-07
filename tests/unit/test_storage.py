@@ -1,12 +1,18 @@
 """Unit tests for the StorageManager class."""
 
+import logging
 import os
 import shutil
 from pathlib import Path
 
+import appdirs
 import pytest
 
-from mcpneurolora.storage import StorageManager
+from mcpneurolora.storage import APP_AUTHOR, APP_NAME, StorageManager
+
+# Configure logging for tests
+logger = logging.getLogger("mcpneurolora.storage")
+logger.setLevel(logging.WARNING)
 
 
 @pytest.fixture
@@ -21,13 +27,12 @@ def subproject_storage(project_root: Path) -> StorageManager:
     return StorageManager(project_root, subproject_id="test-sub")
 
 
-def test_init_basic(
-    storage_manager: StorageManager, project_root: Path
-) -> None:
+def test_init_basic(storage_manager: StorageManager, project_root: Path) -> None:
     """Test basic initialization of StorageManager."""
+    data_dir = Path(appdirs.user_data_dir(APP_NAME, APP_AUTHOR))
     assert storage_manager.project_root == project_root
     assert storage_manager.project_name == project_root.name
-    assert storage_manager.mcp_docs_dir == Path.home() / ".mcp-docs"
+    assert storage_manager.mcp_docs_dir == data_dir / ".mcp-docs"
     assert (
         storage_manager.project_docs_dir
         == storage_manager.mcp_docs_dir / project_root.name
@@ -65,10 +70,7 @@ def test_setup_creates_symlink(storage_manager: StorageManager) -> None:
     # Check symlink exists and points to correct location
     assert storage_manager.neurolora_link.exists()
     assert storage_manager.neurolora_link.is_symlink()
-    assert (
-        storage_manager.neurolora_link.resolve()
-        == storage_manager.project_docs_dir
-    )
+    assert storage_manager.neurolora_link.resolve() == storage_manager.project_docs_dir
 
 
 def test_setup_creates_task_files(storage_manager: StorageManager) -> None:
@@ -95,9 +97,7 @@ def test_get_output_path(storage_manager: StorageManager) -> None:
     assert storage_manager.get_output_path(filename) == expected_path
 
 
-def test_symlink_update(
-    storage_manager: StorageManager, project_root: Path
-) -> None:
+def test_symlink_update(storage_manager: StorageManager, project_root: Path) -> None:
     """Test updating existing symlink."""
     # Create initial setup
     storage_manager.setup()
@@ -129,10 +129,7 @@ def test_error_handling_invalid_symlink(
     storage_manager.setup()
 
     assert storage_manager.neurolora_link.is_symlink()
-    assert (
-        storage_manager.neurolora_link.resolve()
-        == storage_manager.project_docs_dir
-    )
+    assert storage_manager.neurolora_link.resolve() == storage_manager.project_docs_dir
 
 
 def test_error_handling_permission_denied(
@@ -145,24 +142,33 @@ def test_error_handling_permission_denied(
         storage_manager.project_docs_dir.chmod(0o444)
 
         with pytest.raises(Exception) as exc_info:
-            storage_manager._create_template_file(
-                "todo.template.md", "TODO.md"
-            )
+            storage_manager._create_template_file("todo.template.md", "TODO.md")
         assert "Permission denied" in str(exc_info.value)
 
         # Cleanup
         storage_manager.project_docs_dir.chmod(0o777)
 
 
-def test_template_file_missing_template(
-    storage_manager: StorageManager, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_template_file_missing_template(storage_manager: StorageManager) -> None:
     """Test handling missing template files."""
-    storage_manager.setup()
+    # Create a temporary handler to capture logs
+    log_messages = []
 
-    storage_manager._create_template_file("nonexistent.template", "output.md")
+    def log_handler(record: logging.LogRecord) -> None:
+        log_messages.append(record.getMessage())
 
-    assert "Template file not found" in caplog.text
+    # Add temporary handler
+    handler = logging.Handler()
+    handler.handle = log_handler  # type: ignore
+    logger.addHandler(handler)
+
+    try:
+        storage_manager.setup()
+        storage_manager._create_template_file("nonexistent.template", "output.md")
+        assert any("Template file not found" in msg for msg in log_messages)
+    finally:
+        # Remove temporary handler
+        logger.removeHandler(handler)
 
 
 def test_cleanup_between_tests(storage_manager: StorageManager) -> None:
@@ -179,9 +185,7 @@ def test_cleanup_between_tests(storage_manager: StorageManager) -> None:
     assert not storage_manager.neurolora_link.exists()
 
 
-@pytest.mark.parametrize(
-    "subproject_id", ["test-sub", "feature-123", "debug-mode"]
-)
+@pytest.mark.parametrize("subproject_id", ["test-sub", "feature-123", "debug-mode"])
 def test_multiple_subprojects(project_root: Path, subproject_id: str) -> None:
     """Test handling multiple subprojects."""
     storage = StorageManager(project_root, subproject_id=subproject_id)
@@ -217,9 +221,7 @@ def test_concurrent_access(project_root: Path) -> None:
 
     # Verify they point to same location
     assert storage1.project_docs_dir == storage2.project_docs_dir
-    assert (
-        storage1.neurolora_link.resolve() == storage2.neurolora_link.resolve()
-    )
+    assert storage1.neurolora_link.resolve() == storage2.neurolora_link.resolve()
 
     # Cleanup
     if storage1.project_docs_dir.exists():

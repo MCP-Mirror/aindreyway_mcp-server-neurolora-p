@@ -11,7 +11,7 @@ from google.generativeai.types import GenerateContentResponse
 
 from ..utils.progress import ProgressTracker
 from ..utils.token_counter import count_tokens
-from .base_provider import BaseProvider, Message
+from .base_provider import BaseProvider, Message, ProviderConfig
 
 logger = logging.getLogger(__name__)
 
@@ -23,21 +23,15 @@ class GeminiProvider(BaseProvider):
     default_model = "gemini-2.0-flash-exp"
     model: Any = None
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, config: ProviderConfig) -> None:
         """Initialize Gemini provider."""
-        super().__init__(*args, **kwargs)
+        super().__init__(config=config)
         logger.info("Initializing Gemini provider")
         logger.info(
             "API key from config: %s",
-            (
-                self.config.api_key[:10] + "..."
-                if self.config.api_key
-                else "None"
-            ),
+            (self.config.api_key[:10] + "..." if self.config.api_key else "None"),
         )
-        logger.info(
-            "Model from config: %s", self.config.model or self.default_model
-        )
+        logger.info("Model from config: %s", self.config.model or self.default_model)
 
         logger.info("Configuring Gemini with API key")
         genai.configure(api_key=self.config.api_key)
@@ -45,9 +39,7 @@ class GeminiProvider(BaseProvider):
         logger.info("Creating GenerativeModel instance")
         model_name = self.config.model or self.default_model
         self.model = genai.GenerativeModel(model_name)
-        logger.info(
-            "GenerativeModel instance created with model: %s", model_name
-        )
+        logger.info("GenerativeModel instance created with model: %s", model_name)
 
     def count_tokens(self, content: str) -> int:
         """Count tokens in content.
@@ -105,9 +97,7 @@ class GeminiProvider(BaseProvider):
             except asyncio.TimeoutError:
                 await progress.stop("Timeout")
                 timeout_minutes = self.config.timeout_ms / 60000
-                logger.error(
-                    "Request timed out after %.1f minutes", timeout_minutes
-                )
+                logger.error("Request timed out after %.1f minutes", timeout_minutes)
                 raise ValueError(
                     f"Request timed out after {timeout_minutes:.1f} minutes"
                 )

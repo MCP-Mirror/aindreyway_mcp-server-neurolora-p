@@ -1,7 +1,7 @@
 """AI-based code request handler."""
 
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 from ..file_naming import FileType
 from .base_analyzer import BaseAnalyzer

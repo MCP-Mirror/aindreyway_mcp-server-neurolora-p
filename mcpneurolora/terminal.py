@@ -22,6 +22,7 @@ from typing import (
 )
 
 from colorama import Style, init
+from pydantic import ValidationError
 
 from .log_utils import LogCategory, get_logger
 from .providers import is_ai_configured
@@ -91,9 +92,7 @@ class JsonRpcTerminal:
         self._counter = cast(Iterator[int], count())
         self.project_root = Path(project_root) if project_root else None
         self.executor = ToolExecutor(project_root=self.project_root)
-        logger.info(
-            "Created ToolExecutor with project_root=%s", self.project_root
-        )
+        logger.info("Created ToolExecutor with project_root=%s", self.project_root)
 
         # Initialize commands directly from COMMANDS
         self.commands = {
@@ -122,28 +121,17 @@ class JsonRpcTerminal:
             return None
 
         try:
-            # Check for invalid characters
-            if "\0" in line or "\n" in line or "\r" in line:
-                logger.warning("Invalid characters in input")
+            # Basic input validation
+            if "\0" in line:
                 return None
 
-            # Check for multiple spaces
-            if "  " in line:
-                logger.warning("Multiple consecutive spaces in input")
-                return None
-
-            # Split into parts and filter out empty/whitespace
+            # Split and clean input
             parts = [p for p in line.split() if p.strip()]
             if not parts:
-                logger.warning("No command found in input")
                 return None
 
-            # Validate command (first part)
+            # Get command
             command = parts[0]
-            # Allow commands with hyphens
-            if not command.replace("-", "").replace("_", "").isalnum():
-                logger.warning("Invalid command format")
-                return None
 
             # Get params (remaining parts)
             params = parts[1:] if len(parts) > 1 else []
@@ -155,11 +143,7 @@ class JsonRpcTerminal:
                 "params": params,
                 "id": request_id,
             }
-        except ValueError as e:
-            logger.error("Value error parsing request: %s", str(e))
-            return None
-        except TypeError as e:
-            logger.error("Type error parsing request: %s", str(e))
+        except (ValueError, TypeError):
             return None
 
     def format_response(
@@ -217,40 +201,49 @@ class JsonRpcTerminal:
             handler = self.commands[method]
             params: List[str] = request.get("params", [])
 
+            # Validate parameters if command has a model
+            if cmd_def["model"]:
+                model_cls = cmd_def["model"]
+                if model_cls:
+                    schema = model_cls.model_json_schema()
+                    if not schema.get("properties") and params:
+                        raise ValueError(
+                            f"Command '{method}' does not accept parameters"
+                        )
+
             result = await handler(params)
             return self.format_response(result)
+        except ValidationError as e:
+            return self.format_response(
+                None,
+                {"code": -32602, "message": f"Invalid parameter: {str(e)}"},
+            )
         except ValueError as e:
-            logger.error("Invalid parameter value: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32602, "message": f"Invalid parameter: {str(e)}"},
             )
         except FileNotFoundError as e:
-            logger.error("File not found: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32603, "message": f"File not found: {str(e)}"},
             )
         except PermissionError as e:
-            logger.error("Permission denied: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32603, "message": f"Permission denied: {str(e)}"},
             )
         except OSError as e:
-            logger.error("System error: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32603, "message": f"System error: {str(e)}"},
             )
         except (TypeError, json.JSONDecodeError) as e:
-            logger.error("Invalid request format: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32600, "message": f"Invalid request: {str(e)}"},
             )
         except RuntimeError as e:
-            logger.error("Runtime error: %s", str(e))
             return self.format_response(
                 None,
                 {"code": -32603, "message": f"Runtime error: {str(e)}"},
@@ -279,13 +272,10 @@ class JsonRpcTerminal:
             if cmd_def["requires_ai"] and not is_ai_configured():
                 continue
             # Extract command name from description
-            cmd_name, cmd_desc = self._parse_command_desc(
-                cmd_def["description"]
-            )
+            cmd_name, cmd_desc = self._parse_command_desc(cmd_def["description"])
             # Make command name bold
             help_text += (
-                f"{COLORS['BOLD']}{cmd_name}{COLORS['RESET']}: "
-                f"{cmd_desc}\n"
+                f"{COLORS['BOLD']}{cmd_name}{COLORS['RESET']}: " f"{cmd_desc}\n"
             )
 
             # Add parameter descriptions for MCP tools
@@ -296,16 +286,10 @@ class JsonRpcTerminal:
                     if "properties" in schema and schema["properties"]:
                         help_text += "   Parameters:\n"
                         required = schema.get("required", [])
-                        for param_name, param_info in schema[
-                            "properties"
-                        ].items():
-                            desc = param_info.get(
-                                "description", "No description"
-                            )
+                        for param_name, param_info in schema["properties"].items():
+                            desc = param_info.get("description", "No description")
                             is_required = param_name in required
-                            param_type = (
-                                "[REQUIRED]" if is_required else "[OPTIONAL]"
-                            )
+                            param_type = "[REQUIRED]" if is_required else "[OPTIONAL]"
                             help_text += (
                                 f"   {COLORS['BOLD']}{param_name}"
                                 f"{COLORS['RESET']} {param_type}: {desc}\n"
@@ -362,9 +346,7 @@ class JsonRpcTerminal:
         result = await self.executor.execute_code_collector(path)
         return self.executor.format_result(result)
 
-    async def cmd_project_structure_reporter(
-        self, params: List[str]
-    ) -> Dict[str, Any]:
+    async def cmd_project_structure_reporter(self, params: List[str]) -> Dict[str, Any]:
         """Execute project structure report generation.
 
         This command generates a project files tree structure in
@@ -399,9 +381,7 @@ class JsonRpcTerminal:
 
         python = sys.executable
         # execl replaces current process, no code after this will execute
-        os.execl(
-            python, python, "-m", "aindreyway-mcp-server-neurolora", "--dev"
-        )
+        os.execl(python, python, "-m", "aindreyway-mcp-server-neurolora", "--dev")
 
     async def cmd_exit(self, params: List[str]) -> str:
         """Exit the terminal."""

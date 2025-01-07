@@ -148,9 +148,7 @@ COMMANDS: dict[str, CommandDefinition] = {
     },
     "request": {
         "name": "request",
-        "description": (
-            "request: Process code changes using natural language"
-        ),
+        "description": ("request: Process code changes using natural language"),
         "handler_name": "cmd_request",
         "requires_project_root": True,
         "is_mcp_tool": True,
@@ -186,9 +184,7 @@ def get_mcp_tools() -> dict[str, CommandDefinition]:
 
 def get_terminal_commands() -> dict[str, CommandDefinition]:
     """Get terminal-only commands."""
-    return {
-        name: cmd for name, cmd in COMMANDS.items() if not cmd["is_mcp_tool"]
-    }
+    return {name: cmd for name, cmd in COMMANDS.items() if not cmd["is_mcp_tool"]}
 
 
 def get_available_commands(

@@ -1,6 +1,8 @@
 """Unit tests for code collector tool functionality."""
 
+import sys
 from collections.abc import Generator
+from io import StringIO
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, NonCallableMock, patch
@@ -15,10 +17,10 @@ class ToolMock(AsyncMock):
 
     def __init__(
         self,
-        spec: list[str] | object | type[object] | None = None,
+        spec: Any = None,
         wraps: Any | None = None,
         name: str | None = None,
-        spec_set: list[str] | object | type[object] | None = None,
+        spec_set: Any = None,
         parent: NonCallableMock | None = None,
         _spec_state: Any | None = None,
         _new_name: str = "",
@@ -77,7 +79,7 @@ class ToolMock(AsyncMock):
 @fixture
 def mock_fastmcp() -> Generator[MagicMock, None, None]:
     """Mock FastMCP server."""
-    with patch("mcp_server_neurolora.server.FastMCP") as mock:
+    with patch("mcp.server.fastmcp.FastMCP") as mock:
         mock_server = MagicMock()
         mock_server.name = "neurolora"
         mock_server.tools = {"code_collector": ToolMock()}
@@ -87,17 +89,41 @@ def mock_fastmcp() -> Generator[MagicMock, None, None]:
 
 
 @fixture
+def project_root(tmp_path: Path) -> Path:
+    """Create a temporary project root."""
+    project_path = tmp_path / "project"
+    project_path.mkdir()
+    return project_path
+
+
+@fixture
 def mock_collector(project_root: Path) -> Generator[AsyncMock, None, None]:
     """Mock CodeCollector."""
     mock_instance = AsyncMock()
-    mock_instance.collect_code = AsyncMock(
-        return_value=project_root / "output.md"
-    )
+    mock_instance.collect_code = AsyncMock(return_value=project_root / "output.md")
     with patch(
-        "mcp_server_neurolora.server.CodeCollector",
+        "mcpneurolora.tools.collector.Collector",
         return_value=mock_instance,
     ):
         yield mock_instance
+
+
+@fixture
+def mock_stdio() -> Generator[tuple[AsyncMock, AsyncMock], None, None]:
+    """Mock stdio server streams."""
+    read_stream = AsyncMock()
+    write_stream = AsyncMock()
+    with patch("mcp.server.stdio.stdio_server") as mock_stdio:
+        mock_stdio.return_value.__aenter__.return_value = (read_stream, write_stream)
+        yield read_stream, write_stream
+
+
+@fixture
+def mock_stdin() -> Generator[StringIO, None, None]:
+    """Mock stdin for testing."""
+    stdin = StringIO()
+    with patch.object(sys, "stdin", stdin):
+        yield stdin
 
 
 @mark.asyncio
@@ -105,6 +131,8 @@ async def test_code_collector_tool_logging(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
     project_root: Path,
+    mock_stdio: tuple[AsyncMock, AsyncMock],
+    mock_stdin: StringIO,
 ) -> None:
     """Test logging behavior in code collector tool."""
     # Setup mock collector
@@ -128,6 +156,8 @@ async def test_code_collector_tool_logging(
 async def test_code_collector_tool_errors(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
+    mock_stdio: tuple[AsyncMock, AsyncMock],
+    mock_stdin: StringIO,
 ) -> None:
     """Test error handling in code collector tool."""
     await run_mcp_server()
@@ -164,6 +194,8 @@ async def test_code_collector_input_types_and_edge_cases(
     mock_fastmcp: MagicMock,
     mock_collector: AsyncMock,
     project_root: Path,
+    mock_stdio: tuple[AsyncMock, AsyncMock],
+    mock_stdin: StringIO,
 ) -> None:
     """Test code collector tool with different input types and edge cases."""
     await run_mcp_server()

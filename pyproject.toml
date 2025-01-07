@@ -70,14 +70,14 @@ allow-direct-references = true
 mcpneurolora = "mcpneurolora.__main__:main_entry"
 
 [tool.black]
-line-length = 79
+line-length = 88
 target-version = ["py38"]
 preview = true
 skip-string-normalization = false
 
 [tool.isort]
 profile = "black"
-line_length = 79
+line_length = 88
 multi_line_output = 3
 include_trailing_comma = true
 force_grid_wrap = 0
@@ -130,20 +130,19 @@ addopts = """
     --strict-markers
     --strict-config
     --tb=short
-    --cov=src
-    --cov-report=term-missing
-    --cov-report=html
-    --cov-report=xml
-    --no-cov-on-fail
     --randomly-seed=1234
     --randomly-dont-reset-seed
     -v
 """
+
+# Coverage settings are moved to separate config file
+# Use pytest --cov only when running full test suite
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 markers = [
     "slow: marks tests as slow",
     "integration: marks tests as integration tests",

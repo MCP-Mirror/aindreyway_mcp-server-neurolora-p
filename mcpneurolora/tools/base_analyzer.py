@@ -1,200 +1,149 @@
-"""Base class for AI-powered code analysis."""
+"""Base class for code analysis tools."""
 
-import logging
 import os
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional, Union
 
 from ..file_naming import FileType, format_filename
+from ..log_utils import LogCategory, get_logger
+from ..providers import create_provider
 from ..storage import StorageManager
 from ..types import Context
 from ..utils import async_io
 from .collector import Collector
 
 # Get module logger
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = get_logger(__name__, LogCategory.TOOLS)
 
 
 class BaseAnalyzer:
-    """Base class for AI-powered code analysis tools."""
+    """Base class for code analysis tools."""
 
     def __init__(
         self,
         project_root: Optional[Path] = None,
-        context: Optional["Context"] = None,
+        context: Optional[Context] = None,
     ) -> None:
         """Initialize the analyzer.
 
         Args:
             project_root: Optional path to project root directory.
                         If not provided, uses current working directory.
+            context: Optional context for progress reporting.
         """
         # Get the project root directory
         self.project_root = project_root or Path.cwd()
 
         # Initialize storage manager
         self.storage = StorageManager(project_root)
-        self.storage.setup()
+        try:
+            self.storage.setup()
+            logger.info("Storage setup completed successfully")
+        except Exception as err:
+            logger.error("Failed to setup storage: %s", str(err))
+            raise RuntimeError(f"Storage setup failed: {str(err)}")
 
         # Initialize code collector
         self.collector = Collector(project_root)
 
+        # Initialize AI provider
+        self.provider = create_provider()
+
         # Store context for progress reporting
         self.context = context
 
-        # Initialize AI provider using factory
-        from ..providers import create_provider
-
-        logger.info("Creating AI provider")
-        self.provider = create_provider()
-        logger.info("AI provider created")
-
     async def analyze_code(
         self,
-        input_paths: str | list[str],
+        input_paths: Union[str, List[str]],
         title: str,
         prompt_name: str,
         output_type: FileType,
         extra_content: str = "",
     ) -> Optional[Path]:
-        """Analyze code using AI.
+        """Analyze code and generate report.
 
         Args:
             input_paths: Path(s) to analyze
-            title: Title for the collection
-            prompt_name: Name of the prompt file (without .prompt.md)
-            output_type: Type of output file
-            extra_content: Additional content to add to prompt
+            title: Title for analysis report
+            prompt_name: Name of prompt file to use
+            output_type: Type of output file to generate
+            extra_content: Optional extra content to add to prompt
 
         Returns:
             Optional[Path]: Path to generated analysis file or None if failed
         """
         try:
+            # Input validation
+            if not input_paths:
+                logger.error("Empty input path")
+                return None
+
+            # Convert input paths to list of strings
+            validated_paths: List[str]
+            if isinstance(input_paths, list):
+                # Filter out empty paths and convert to strings
+                validated_paths = [str(p) for p in input_paths if p]
+                if not validated_paths:
+                    logger.error("No valid paths in list")
+                    return None
+            else:
+                validated_paths = [str(input_paths)]
+
+            # Report progress
             if self.context:
                 self.context.info("Starting code collection...")
+                await self.context.report_progress(0.25, 100.0)
 
-            # First collect all code
-            code_file = await self.collector.collect_code(input_paths)
-            if not code_file:
-                logger.error("Failed to collect code")
+            # Collect code
+            code_output = await self.collector.collect_code(validated_paths)
+            if not code_output:
+                logger.error("Code collection failed or no files found")
                 return None
 
             if self.context:
                 self.context.info("Code collected successfully")
-                await self.context.report_progress(25, 100)
+                await self.context.report_progress(0.50, 100.0)
 
-            # Read the collected code
-            code_content = await async_io.read_file(code_file)
+            # Read code content and write to file
+            code_content = await async_io.read_file(code_output)
+            await async_io.write_file(code_output, code_content)
 
-            if self.context:
-                self.context.info("Getting analysis prompt...")
-                await self.context.report_progress(50, 100)
-
-            # Get prompt
+            # Read prompt template and write to file
             prompt_path = (
-                Path(__file__).parent.parent
-                / "prompts"
-                / f"{prompt_name}.prompt.md"
+                Path(__file__).parent.parent / "prompts" / f"{prompt_name}.prompt.md"
             )
             prompt_content = await async_io.read_file(prompt_path)
+            await async_io.write_file(prompt_path, prompt_content)
 
-            # Combine prompt and code
-            full_prompt = (
-                f"{prompt_content}\n\n{extra_content}\n\n{code_content}"
+            # Prepare analysis content
+            analysis_content = f"{prompt_content}\n\n{extra_content}\n\n{code_content}"
+
+            # Get analysis from AI provider
+            if self.context:
+                await self.context.report_progress(0.75, 100.0)
+
+            analysis_result = await self.provider.analyze(analysis_content)
+
+            # Create output file
+            output_path = self.storage.get_output_path(format_filename(output_type))
+
+            # Format result with metadata
+            model_info = os.getenv("AI_MODEL", "default")
+            formatted_result = (
+                f"# {title}\n\n"
+                f"Model: {model_info}\n\n"
+                f"{analysis_result or 'No analysis results available.'}"
             )
 
-            # Get AI analysis
-            try:
-                if self.context:
-                    model = os.getenv("AI_MODEL", "unknown")
-                    provider = self.provider.name
-                    self.context.info(
-                        f"Starting analysis with model: {model} ({provider})"
-                    )
-                    await self.context.report_progress(75, 100)
-
-                analysis = await self.provider.analyze(full_prompt)
-            except ValueError as e:
-                logger.error("Invalid input for analysis: %s", str(e))
-                return None
-            except RuntimeError as e:
-                logger.error("Analysis failed: %s", str(e))
-                return None
-
-            # Use same timestamp for all files
-            timestamp = datetime.now()
-
-            # Create output paths with same timestamp
-            code_output_path = self.storage.get_output_path(
-                format_filename(
-                    FileType.CODE,
-                    prompt_name,
-                    timestamp=timestamp,
-                    provider=self.provider.name,
-                )
-            )
-
-            # Save collected code
-            await async_io.write_file(code_output_path, code_content)
-
-            # Save prompt based on command
-            prompt_type = (
-                FileType.REQUEST_PROMPT
-                if output_type == FileType.REQUEST_RESULT
-                else FileType.IMPROVE_PROMPT
-            )
-            prompt_output_path = self.storage.get_output_path(
-                format_filename(
-                    prompt_type,
-                    prompt_name,
-                    timestamp=timestamp,
-                    provider=self.provider.name,
-                )
-            )
-            await async_io.write_file(prompt_output_path, full_prompt)
-
-            # Write analysis result only for improve and request commands
-            if output_type in [
-                FileType.IMPROVE_RESULT,
-                FileType.REQUEST_RESULT,
-            ]:
-                result_output_path = self.storage.get_output_path(
-                    format_filename(
-                        output_type,
-                        prompt_name,
-                        timestamp=timestamp,
-                        provider=self.provider.name,
-                    )
-                )
-                result_content = [
-                    f"# {title}\n\n",
-                    f"{extra_content}\n\n" if extra_content else "",
-                    f"Analysis of code from: {input_paths}\n",
-                    f"Model: {os.getenv('AI_MODEL', 'o1')}\n\n",
-                    analysis,
-                ]
-                await async_io.write_file(
-                    result_output_path, "".join(result_content)
-                )
-
-                if self.context:
-                    self.context.info("Analysis complete!")
-                    await self.context.report_progress(100, 100)
-                return Path(result_output_path)
+            # Write result
+            await async_io.write_file(output_path, formatted_result)
 
             if self.context:
                 self.context.info("Analysis complete!")
-                await self.context.report_progress(100, 100)
-            return Path(code_output_path)
+                await self.context.report_progress(1.0, 100.0)
 
-        except (ValueError, TypeError) as e:
-            logger.error("Invalid input error: %s", str(e))
-            return None
-        except OSError as e:
-            logger.error("System error: %s", str(e))
-            return None
-        except RuntimeError as e:
-            logger.error("Runtime error: %s", str(e))
+            return output_path
+
+        except Exception as err:
+            logger.error("Error during analysis: %s", str(err))
             return None

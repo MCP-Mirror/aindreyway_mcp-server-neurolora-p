@@ -120,9 +120,7 @@ async def is_dir(path: Path) -> bool:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, path.is_dir)
     except OSError as e:
-        logger.error(
-            "Error checking if path is directory %s: %s", path, str(e)
-        )
+        logger.error("Error checking if path is directory %s: %s", path, str(e))
         return False
 
 
@@ -182,9 +180,7 @@ def _walk(path: Path) -> Iterator[Tuple[Path, List[str], List[str]]]:
         yield Path(root), dirs, files
 
 
-async def walk_directory(
-    path: Path, ignore_func: Callable[[Path], bool]
-) -> List[Path]:
+async def walk_directory(path: Path, ignore_func: Callable[[Path], bool]) -> List[Path]:
     """Walk directory asynchronously, filtering with ignore function.
 
     Args:

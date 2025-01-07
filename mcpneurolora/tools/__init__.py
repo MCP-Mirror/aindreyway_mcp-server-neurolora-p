@@ -8,8 +8,8 @@ This package contains the implementation of various tools:
 """
 
 from .collector import Collector
-from .reporter import Reporter
 from .improver import Improver
+from .reporter import Reporter
 from .requester import Requester
 
 __all__ = [

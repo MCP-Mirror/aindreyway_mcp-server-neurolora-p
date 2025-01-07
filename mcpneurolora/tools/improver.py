@@ -1,7 +1,7 @@
 """AI-based code improvement suggestions."""
 
 from pathlib import Path
-from typing import Optional, Union, List
+from typing import List, Optional, Union
 
 from ..file_naming import FileType
 from .base_analyzer import BaseAnalyzer
@@ -22,6 +22,10 @@ class Improver(BaseAnalyzer):
         Returns:
             Optional[Path]: Path to generated analysis file or None if failed
         """
+        # Validate input is not empty
+        if not input_paths:
+            return None
+
         return await self.analyze_code(
             input_paths=input_paths,
             title="Code Improvement Suggestions",

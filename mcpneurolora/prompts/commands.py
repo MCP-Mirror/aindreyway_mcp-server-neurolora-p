@@ -1,15 +1,14 @@
 """Command prompts for MCP server."""
 
 from typing import List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class CommandHelpInput(BaseModel):
     """Input for command help prompt."""
 
-    command: str = Field(
-        ..., description="Name of the command to get help for"
-    )
+    command: str = Field(..., description="Name of the command to get help for")
 
 
 class CommandHelpOutput(BaseModel):
@@ -35,9 +34,7 @@ class CommandSuggestionInput(BaseModel):
 
     command: str = Field(..., description="The command that was executed")
     success: bool = Field(..., description="Whether the command succeeded")
-    error: Optional[str] = Field(
-        None, description="Error message if command failed"
-    )
+    error: Optional[str] = Field(None, description="Error message if command failed")
 
 
 class CommandSuggestionOutput(BaseModel):

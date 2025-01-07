@@ -34,8 +34,7 @@ class AnthropicProvider(BaseProvider):
             )
         except ImportError:
             raise ImportError(
-                "Anthropic package not found. "
-                "Install it with: pip install anthropic"
+                "Anthropic package not found. " "Install it with: pip install anthropic"
             )
 
     def count_tokens(self, content: str) -> int:

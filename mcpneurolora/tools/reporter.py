@@ -1,14 +1,13 @@
 """Project structure analysis and reporting."""
 
-import asyncio
 import fnmatch
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, TypedDict, cast, Callable
+from typing import Callable, List, Optional, TypedDict, cast
 
 from ..file_naming import FileType, format_filename, get_file_pattern
+from ..log_utils import LogCategory, get_logger
 from ..storage import StorageManager
-from ..log_utils import get_logger, LogCategory
 from ..utils import async_io
 
 # Get module logger
@@ -211,10 +210,38 @@ class Reporter:
         Returns:
             Callable[[Path], bool]: Synchronous ignore function
         """
-        loop = asyncio.get_event_loop()
 
         def sync_ignore(path: Path) -> bool:
-            return bool(loop.run_until_complete(self.should_ignore(path)))
+            # Use synchronous checks only
+            try:
+                relative_path = path.relative_to(self.root_dir)
+                str_path = str(relative_path)
+
+                # Check patterns
+                for pattern in self.ignore_patterns:
+                    if pattern.endswith("/"):
+                        if any(
+                            part == pattern[:-1]
+                            for part in relative_path.parts
+                        ):
+                            return True
+                    elif fnmatch.fnmatch(str_path, pattern) or fnmatch.fnmatch(
+                        path.name, pattern
+                    ):
+                        return True
+
+                # Check generated files
+                for file_type in FileType:
+                    if get_file_pattern(file_type).search(str(path)):
+                        return True
+
+                # Always ignore .neuroloraignore
+                if path.name == ".neuroloraignore":
+                    return True
+
+                return False
+            except Exception:
+                return True
 
         return sync_ignore
 

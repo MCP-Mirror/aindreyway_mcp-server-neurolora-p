@@ -145,9 +145,7 @@ class ProgressTracker:
         if self.start_time is not None:
             elapsed = now - self.start_time
             if self.current_step > 0:
-                total_estimated = (
-                    elapsed / self.current_step
-                ) * self.total_steps
+                total_estimated = (elapsed / self.current_step) * self.total_steps
                 remaining = max(0, total_estimated - elapsed)
                 eta_str = f"ETA: {remaining:.1f}s"
 
@@ -191,9 +189,7 @@ class ProgressTracker:
                 f"{message} ({duration:.1f}s) {eta_str}"
             ).strip()
         else:
-            return (
-                f"{self.prefix} {content_info}{bar} {percent}% {message}"
-            ).strip()
+            return (f"{self.prefix} {content_info}{bar} {percent}% {message}").strip()
 
     async def _update_loop(self) -> None:
         """Continuously update progress display."""
@@ -227,9 +223,7 @@ class ProgressTracker:
             ),
         )
 
-    async def _log_progress(
-        self, message: str = "", force: bool = False
-    ) -> None:
+    async def _log_progress(self, message: str = "", force: bool = False) -> None:
         """Log progress message.
 
         Args:
